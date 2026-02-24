@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# Environment
+.env
+.env.txt
+
+# Data & uploads
+file_store/
+*.db
+*.sqlite
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Project-specific data
+docs/HRGS_*
+docs/panynj_*
+docs/xer_*
+docs/deeper_analysis.txt
+test_scope.pdf
+
+# Desktop-only
+run_desktop.bat
+DESKTOP_DEPLOY.md

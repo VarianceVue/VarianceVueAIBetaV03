@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "routes": [
+    { "src": "/assets/(.*)", "dest": "schedule_agent_web/static/assets/$1" },
+    { "src": "/(.*)", "dest": "api/index.py" }
+  ]
+}

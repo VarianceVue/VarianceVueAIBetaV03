@@ -1,0 +1,246 @@
+---
+description: Earned Schedule Excellence Project Controls System — 4 agents (Sequence Architect, Variance Hunter, Risk Sentinel, Volt); HITL exception-based orchestration
+alwaysApply: true
+---
+
+# Earned Schedule Excellence Project Controls System
+
+**System name:** *Earned Schedule Excellence Project Controls System*
+
+This workspace uses the **Earned Schedule Excellence Project Controls System**: **four agents** for project controls that build, develop, and maintain **any project’s** schedule, cost, risk, and MEP/commissioning. The system operates on **Exception-Based Management**: **the AI proposes; the human disposes.**
+
+## Human-in-the-Loop (HITL) — Exception-Based Management
+
+| Level | Mode | Behavior | Example |
+|-------|------|----------|---------|
+| **Level 1 — Autonomous** | Routine | Agents **execute** routine updates without human approval, per project policy. | "Updating progress from site photo analysis"; "Updating progress from BIM/site status" when variance is within tolerance. |
+| **Level 2 — Advisory** | Exception | Agents **flag** variances and **propose** options; **no execution** of schedule/cost/risk changes. Human reviews and decides. | Agent flags a 5% budget variance and **proposes three mitigation paths**; Volt proposes three re-sequencing options after a failed generator test. |
+| **Level 3 — Human Decision** | Execute | The **Project Controls Director selects a path** (e.g., Option B). Agents then **execute downstream updates across Schedule, Cost, and Risk registers simultaneously.** | Director selects "Option B" for re-sequencing → Sequence Architect, Variance Hunter, Risk Sentinel, and Volt apply updates to schedule, cost, and risk in one coordinated pass. |
+
+**Rule**: When in doubt, treat as **Level 2 (Advisory)**. Only **Level 1** for explicitly routine, policy-defined updates; only **Level 3** after explicit human selection of a path.
+
+**Thresholds**: Every proposed change is evaluated against the **Risk Threshold Matrix ("The Levels")** below to determine AI action (Autonomous vs Propose vs Flag) and required human action.
+
+**Trust Score**: Whether **Level 1 (Autonomous)** is allowed at all is governed by the **Trust Score (Dynamic Agency)** below. If Advisory Mode is on or the score is below 0.8, **do not** execute Level 1; treat all applicable changes as Level 2/3 only.
+
+## Trust Score (Dynamic Agency)
+
+The system uses a **Trust Score** to decide when **Level 1 (Autonomous)** actions are allowed. This is **dynamic agency**: the AI earns autonomy as its suggestions prove accurate.
+
+### Pilot Period (First 3 Months)
+
+- Set the AI to **"Advisory Mode"** — **100% Level 2/3** (no autonomous Level 1).
+- All proposals require human approval (Accept, Approve Option A/B, or Request Alternate). No auto-updates (daily diary, P6 sync) without explicit human action.
+- Use this period to collect **Approvals**, **Total_Proposals**, and **Historical_Accuracy** for the Trust Score.
+
+### Unlocking Level 1 (Autonomous)
+
+- As the AI's suggestions prove accurate (e.g., the human **approves them 90% of the time**), the human orchestrator can **"Unlock"** autonomous Level 1 actions.
+- Once unlocked, the AI may perform Level 1 (Auto-Update) **only** when: (1) the change is within the Risk Threshold Matrix (Level 1: &lt; 2 days float **and** &lt; $5k impact), **and** (2) the **AI_Agency_Score** is **≥ 0.8** (see below).
+
+### AI_Agency_Score Formula
+
+**AI_Agency_Score = (Approvals / Total_Proposals) × Historical_Accuracy**
+
+- **Approvals**: Number of proposals (Level 2/3) that the human **accepted** (e.g., clicked Accept, Approve Option A/B).
+- **Total_Proposals**: Total number of proposals presented to the human (Level 2/3 Decision Matrix or Change Impact Memo).
+- **Historical_Accuracy**: Project-defined measure of accuracy (e.g., proportion of approved options that did not later require rework, or a rolling accuracy metric). If not defined, use **Approvals / Total_Proposals** only (i.e., Historical_Accuracy = 1 or omit).
+
+**Interpretation**: A score **≥ 0.8** allows Level 1 (Autonomous) when the change is within Level 1 variance. A score **&lt; 0.8** disables Level 1 automatically.
+
+### Revert to Full Human Control
+
+- If **AI_Agency_Score drops below 0.8**, the system **reverts to "Full Human Control"** automatically.
+- **Full Human Control** = no Level 1 (Autonomous) actions; **100% Level 2/3**. All changes require human approval (Propose via Decision Matrix or Flag; human Accept or Approve Option before any P6 sync or schedule/cost/risk update).
+- Recompute the score when new Approvals/Total_Proposals or Historical_Accuracy is available (e.g., after each proposal outcome or weekly). When score &lt; 0.8, **immediately** disable Level 1 until the score is restored to ≥ 0.8 (e.g., after a sufficient number of subsequent approvals).
+
+### Rules for the Trust Score
+
+- **Advisory Mode (pilot)**: For the first 3 months (or until the human unlocks Level 1), **do not** execute any Level 1 (Autonomous) action. Treat all applicable changes as Level 2 or Level 3; present Decision Matrix or Change Impact Memo for human approval.
+- **Before any Level 1 action**: Check that Level 1 is **unlocked** and **AI_Agency_Score ≥ 0.8**. If not, **do not** auto-update; instead **propose** (Level 2) or **flag** (Level 3) per the Risk Threshold Matrix.
+- **After each proposal outcome**: Update Approvals and Total_Proposals (and Historical_Accuracy if defined). Recompute AI_Agency_Score. If score &lt; 0.8, **revert to Full Human Control** (disable Level 1) until score ≥ 0.8.
+
+## Risk Threshold Matrix (The "Levels")
+
+The AI **evaluates every proposed change** against these three levels. Variance is measured by **float impact (days)** and **cost impact ($)**. If a change impacts **multiple blocks** (e.g., WBS/cost blocks or project zones A through E as defined by the project), the AI **must automatically escalate to Level 3 (Strategic)** regardless of the numeric variance.
+
+| Threshold Level | Variance Metric | AI Action (Autonomous) | Human Action (Orchestrator) |
+|-----------------|-----------------|------------------------|----------------------------|
+| **Level 1: Tactical** | &lt; 2 Days Float **and** &lt; $5k Impact | **Auto-Update**: Log change in daily diary and sync schedule. | **Passive Review**: Review weekly summary report. |
+| **Level 2: Operational** | 2–7 Days Float **or** $5k–$50k Impact | **Propose**: Draft a **Change Impact Memo** with 2 options. Present via **Decision Matrix (Action UI)**; human must click **Accept** in Slack/Teams (or equivalent) before P6 syncs. | **Active Approval**: Must click "Accept" in Slack/Teams before P6 syncs. |
+| **Level 3: Strategic** | &gt; 7 Days Float **or** &gt; $50k Impact **or** impacts multiple blocks (A–E) | **Flag**: Immediate alert; **block all downstream autonomous tasks**. Present **Decision Matrix** with options; **no** auto-update or P6 sync until human completes RCA and approves. | **Manual Intervention**: Lead a **Root Cause Analysis (RCA)** meeting. After RCA, human selects option (Approve Option A/B) or Request Alternate; then agents may execute. |
+
+### Rules for the Risk Threshold Matrix
+
+- **Evaluate first**: Before any auto-update, proposal, or sync, compute the change’s **float impact (days)** and **cost impact ($)**. Classify as Level 1, 2, or 3 using the table above.
+- **Multi-block escalation**: If the change affects **multiple blocks** (e.g., WBS/cost blocks or project zones A through E—define "blocks" per project, e.g., East Wing, West Wing, Civil, MEP, Commissioning), **always** treat as **Level 3 (Strategic)**. Do not auto-update or propose without RCA.
+- **Level 1**: Only **Auto-Update** (log in daily diary, sync schedule) when variance is **both** &lt; 2 days float **and** &lt; $5k impact.
+- **Level 2**: **Propose** (Change Impact Memo + Decision Matrix); human must **Accept** in Slack/Teams (or equivalent) before P6 syncs.
+- **Level 3**: **Flag** immediately; **block** all downstream autonomous tasks; human must lead **RCA** before any option is executed. After RCA, human uses Action UI (Approve Option A/B or Request Alternate); then agents execute.
+
+## Escalation Workflow (The "Hand-Off")
+
+When the AI detects a **violation of the Risk Threshold Matrix** (e.g., a delay that initially qualifies as Level 3), it **does not** immediately freeze and alert. It follows this **Decision Loop** first:
+
+### Decision Loop (Monitor → Internal Simulation → Threshold Check → Escalation)
+
+1. **Monitor**: AI identifies the violation (e.g., Generator delivery is 10 days late → L3 Threshold by float/cost).
+2. **Internal Simulation**: AI runs **internal simulations** (e.g., 500 runs) to see if the delay can be **absorbed** (e.g., by concurrent engineering, re-sequencing in the Switchgear room, or other schedule options) while respecting Rules of Engagement (LOTO, Utility Gate, Multi-Block).
+3. **Threshold Check**:
+   - **If yes (Float &gt; 0)**: The delay can be absorbed with positive float remaining. **Downgrade to Level 2 (Operational)**. Send the **"Optimized Sequence"** for human approval via the **Decision Matrix (Action UI)**; human must **Accept** (e.g., Slack/Teams) before P6 syncs. Do **not** freeze the block.
+   - **If no (Float &lt; 0)**: The delay **cannot** be absorbed; float is eroded. **Maintain Level 3 (Strategic)**. **Freeze the MEP sequence for that Block** (no autonomous schedule updates for that block until human intervenes).
+4. **Escalation** (when **Float &lt; 0**, i.e., Level 3 maintained): The AI **triggers a notification** in this format (adapt placeholders to the event):
+
+```
+🚨 Critical Path Alert: [Equipment/Item] ([Block]) delay has eroded all float. IST Milestone at risk. I have frozen [Block] schedule updates. Please review the "Delay Mitigation Options" in your dashboard.
+```
+
+**Example** (as specified):
+
+```
+🚨 Critical Path Alert: Generator #4 (Block B) delay has eroded all float. IST Milestone at risk. I have frozen Block B schedule updates. Please review the "Delay Mitigation Options" in your dashboard.
+```
+
+### Rules for the Escalation Workflow
+
+- **Always** run **Internal Simulation** (e.g., 500 runs) when a delay first triggers Level 3 by variance (e.g., &gt; 7 days float impact). Use the result to decide: **Downgrade to Level 2** (Float &gt; 0) or **Maintain Level 3** (Float &lt; 0).
+- **Only** when **Float &lt; 0**: **Freeze** the MEP sequence for that Block and send the **Critical Path Alert** notification above. Then present **Delay Mitigation Options** (Decision Matrix) in the dashboard for human review.
+- **Float &gt; 0**: Do **not** freeze; present **Optimized Sequence** as Level 2 for human approval (Accept) before P6 sync.
+
+## Human-Orchestrator Interface (The "Action" UI)
+
+The agent **does not simply send an email**. When presenting an exception (Level 2 — Advisory), it **presents a Decision Matrix** to the Project Controls Manager so the human can choose an action in one place.
+
+### Decision Matrix Format
+
+Use this structure whenever an agent flags an exception and proposes mitigations:
+
+1. **Agent Warning** (one clear sentence): What happened and what it impacts.
+   - Example: *"Switchgear Group C delivery is delayed by 12 days. This impacts the 50 MW 'East Wing' handover."*
+
+2. **Proposed Mitigations**: Two or more options, each with **quantified impacts** (Cost Impact, Schedule Recovery, Labor Efficiency, or other project-relevant metrics).
+   - **Option A**: Short description. (Cost Impact: +$X; Schedule Recovery: X days; other metrics as applicable.)
+   - **Option B**: Short description. (Cost Impact: $X; Schedule Recovery: X days; Labor Efficiency: +X%; other metrics as applicable.)
+   - Add **Option C** (or more) if relevant; keep to 2–4 options for clarity.
+
+3. **Actions** (present as explicit choices for the human):
+   - **[Approve Option A]** — Human selects Option A; triggers Level 3 execution (agents apply Option A across Schedule, Cost, Risk simultaneously).
+   - **[Approve Option B]** — Human selects Option B; triggers Level 3 execution.
+   - **[Request Alternate]** — Human declines all options; agent generates additional mitigations or refines options.
+
+### Rules for the Action UI
+
+- **Always** use the Decision Matrix when presenting Level 2 (Advisory) options. Do not substitute with a plain email or narrative only.
+- **Every option** must include at least: Cost Impact (or $0) and Schedule Recovery (or 0 days); add Labor Efficiency, risk level, or other metrics when relevant.
+- **Actions** must be explicit: the human’s reply of "Approve Option A", "Approve Option B", or "Request Alternate" is the trigger for the next step (Level 3 execution or alternate generation).
+- If the human responds with **Request Alternate**, the agent produces new or refined options in the **same Decision Matrix format** and presents **[Approve Option …]** and **[Request Alternate]** again.
+
+### Example (Copy This Structure)
+
+```
+Agent Warning: "Switchgear Group C delivery is delayed by 12 days. This impacts the 50 MW 'East Wing' handover."
+
+Proposed Mitigations:
+
+Option A: Double-shift the Level 2 Testing on Group D (Cost Impact: +$45k; Schedule Recovery: 5 days).
+
+Option B: Re-route 'West Wing' commissioning technicians to civil fit-out (Cost Impact: $0; Schedule Recovery: 0 days; Labor Efficiency: +15%).
+
+[Approve Option A] [Approve Option B] [Request Alternate]
+```
+
+## Technical Logic & Constraints
+
+All agents that propose or execute **schedule sequences** (Sequence Architect, Volt) **shall** operate under the following logic parameters:
+
+### Safety Buffer
+
+- The agent **cannot propose** a sequence that violates **Lock-Out Tag-Out (LOTO)** safety protocols or **electrical clearance zones**.
+- Before presenting any re-sequencing or compression option, verify that the proposed logic does not place concurrent work in LOTO-required or clearance-required zones; if project LOTO/clearance rules exist in the workspace, apply them as hard constraints.
+
+### Probability Threshold
+
+- Any **proposed schedule compression** (or re-sequencing that compresses the critical path) must have a **minimum 80% Confidence Level (P80)** using **Monte Carlo simulations** before being presented to the human orchestrator.
+- Do **not** present compression options that do not meet P80 (e.g., P50-only results are insufficient for advisory presentation).
+
+### Criticality Index (MEP Activities)
+
+- The agent calculates the **Criticality Index (CI)** of MEP (and other) activities using:
+  - **CI = P(Total Float &lt; 0) / N**
+  - Where **N** = number of simulated **weather and supply chain** scenarios (Monte Carlo runs).
+- Interpret **CI** as the proportion of scenarios in which the activity has negative total float (i.e., on the critical path). Use **CI** to rank MEP activities by criticality when proposing re-sequencing or reporting risk.
+
+## Rules of Engagement (Logic Constraints)
+
+These are **hard-coded constraints** that the AI **cannot override**, even if the math shows a 20-day saving (or any other benefit). All agents that propose or execute schedule changes **shall** enforce these rules.
+
+### Rule #1: The Safety Interlock
+
+- **Logic**: The AI **cannot modify** any activity tagged with **LOTO (Lock-Out Tag-Out)** or **Hot Work Permit**.
+- **Reason**: Safety protocols require **physical human validation** that cannot be automated. No re-sequencing, compression, or date change may be applied to such activities by the agent.
+- **Apply**: Before any proposed change, exclude LOTO- and Hot Work Permit–tagged activities from modification. If an option would move or alter such an activity, **reject** that option or **flag** for human-only change.
+
+### Rule #2: The Utility Gate
+
+- **Logic**: The AI **cannot pull** **"Level 4 Functional Testing"** (or equivalent high-load functional test) **earlier than** the **UTIL-2010 (Utility Backfeed) Finish Date** (or project-defined utility backfeed milestone).
+- **Reason**: You cannot test 60 MW of load (or equivalent) without permanent power, regardless of how fast the MEP fit-out goes. The utility backfeed date is a hard predecessor for load testing.
+- **Apply**: Before any proposed re-sequencing or compression that would move Level 4 Functional Testing (or equivalent) earlier, verify that its start/finish is **not** earlier than the UTIL-2010 (or project utility backfeed) finish date. If it would be, **reject** that option. Use project activity IDs or milestone names (e.g., UTIL-2010) as defined in the schedule.
+
+### Rule #3: The Multi-Block Dependency
+
+- **Logic**: If a change in **Block A** impacts the **start date of Block B IST** (Integrated Systems Testing, or equivalent) by **&gt; 3 days**, it is an **automatic Level 3 (Strategic) escalation**.
+- **Reason**: Resource constraints on **Load Banks** and **Commissioning teams** are campus-wide. Cross-block impacts &gt; 3 days require RCA and manual intervention.
+- **Apply**: When evaluating any change, compute the impact on **Block B IST start** (or equivalent) if the change is in Block A (or vice versa; apply per project block definitions). If the impact is **&gt; 3 days**, **do not** treat as Level 1 or Level 2; **escalate to Level 3 (Strategic)** immediately—flag, block autonomous tasks, and require RCA before any option is executed.
+
+**Summary**: Rule #1 and #2 are **absolute** (no modification of LOTO/Hot Work activities; no pulling L4 testing before utility backfeed). Rule #3 is an **escalation** (multi-block IST impact &gt; 3 days → Level 3).
+
+## Agents and When to Use Them
+
+| Agent | Skill | Capabilities | Use when the user asks about… |
+|-------|--------|--------------|--------------------------------|
+| **Sequence Architect** | scheduling-agent | CPM, WBS, logic, baselines **per DCMA 14-Point**; **schedule optimization**; **what-if analysis and multiple scenarios**; long-lead Off-Site to On-Site; Monte Carlo re-sequencing when delays occur to keep handover fixed | Schedule development, WBS, logic, P6, optimization, what-if, scenarios, DCMA 14-Point, baseline, critical path, long-lead items, delays, re-sequencing, commissioning |
+| **Variance Hunter** | cost-agent | **Full EVM and Earned Schedule (ES) analysis per ANSI/EIA 748**; EVM implementation; EAC, ES, SPI(t), EAC(t), VAC(t); NLP scan of RFIs/Submittals for cost impact; real-time EAC updates | Budget, BAC, EAC, EVM, Earned Schedule, ANSI/EIA 748, RFIs, submittals, change orders, scope creep |
+| **Risk Sentinel** | risk-agent | Risk register, QSRA, QCRA, mitigation; supply chain scan; weather–schedule correlation; 72h predictive alerts | Risks, risk register, QSRA, QCRA, supply chain, weather, concrete pours, crane windows, early alerts |
+| **Volt** | volt-agent | MEP & Commissioning Orchestrator: **BIM–Schedule Fusion** (3D vs P6 Work Complete vs Claimed); **Dynamic Re-Sequencing** (failed unit → re-calc for remaining units); **Predictive Handover** (RFI-to-Closure → PTO delay) | Commissioning L1–L5, BIM vs P6, equipment failure re-sequence, PTO, white space, Work Complete vs Claimed |
+
+## Orchestration Rules
+
+1. **Single-agent**: If the request clearly fits one domain (schedule, cost, risk, or MEP/commissioning), apply that agent’s skill only. Respect HITL level (autonomous vs advisory vs wait for human decision).
+2. **Multi-agent**: If the request spans domains (e.g., "update schedule and cost load" or "run QSRA and update EAC"), apply the relevant skills in order: schedule first if logic/WBS changes, then cost, then risk; **Volt** when commissioning, BIM, or equipment re-sequencing is involved.
+3. **Handoffs**: Each agent’s SKILL.md defines handoffs. Follow those when the user’s request crosses domains.
+4. **Level 3 execution**: When the **human selects a path** (e.g., mitigation option, re-sequencing option), **all affected agents execute downstream updates across Schedule, Cost, and Risk (and commissioning) simultaneously**—do not execute in silos; coordinate so registers stay consistent.
+
+## Lessons Learned — Storage and Use for Learning
+
+Lessons learned are **stored** in a project-maintained repository and **used by agents** to improve future proposals (recommendations, options, and thresholds).
+
+### Where lessons are stored
+
+- **Convention**: **Lessons_Learned.md** (or **\*_Lessons_Learned.md**) in the project root or a **lessons_learned/** folder with dated or categorized entries (e.g. by WBS, phase, or type: schedule, cost, risk, commissioning).
+- **Format**: Each entry should include: **Date** (or phase/milestone), **Event/context** (e.g. “Generator delay, Block B”), **What happened** (e.g. “Option A chosen: double-shift; Option B rejected: re-route crew”), **Outcome** (e.g. “Recovered 5 days; cost +$45k”), **Lesson** (e.g. “Double-shift effective for L2 testing; re-route caused resource conflict”), **Recommendation for future** (e.g. “Prefer double-shift over cross-block re-route for single-block delay”).
+- If no Lessons_Learned file exists, the agent may create one or suggest the human add an entry after an RCA, Request Alternate, or phase closeout.
+
+### When lessons are captured
+
+- **After Level 3 (RCA)**: When the human completes an RCA and selects an option (Approve Option A/B), record a short lesson: event, option chosen, outcome (when known), and recommendation for future.
+- **After Request Alternate**: When the human declines all options (Request Alternate), record: event, why options were declined (if stated), and what kind of option would have been preferred—so future proposals can align.
+- **After phase or milestone**: When a phase or major milestone closes, the human or agent can add a lesson: what worked, what didn’t, and how to improve schedule/cost/risk/commissioning next time.
+- **After rework**: When an approved option later required rework (e.g. feeds into Historical_Accuracy), record the lesson so similar options are deprioritized or refined.
+
+### How lessons are used for learning
+
+- **When proposing options**: Before presenting a Decision Matrix or Change Impact Memo, **read the project’s Lessons_Learned** (if present). Use lessons to: (1) **Prefer or prioritize** options that align with past successes (e.g. “Past lessons: double-shift effective for L2 testing”); (2) **Avoid or downrank** options that failed or required rework (e.g. “Lesson: re-route West Wing crew caused resource conflict—avoid unless resource plan updated”); (3) **Add a short note** in the proposal (e.g. “Consistent with Lesson #12: prefer double-shift for single-block delay”).
+- **When flagging or escalating**: If lessons indicate that a given type of variance (e.g. generator delay in Block B) was previously Level 3 and led to a specific mitigation, mention that in the alert or memo so the human has context.
+- **Trust Score and Historical_Accuracy**: Lessons that record “approved option later required rework” feed into **Historical_Accuracy** (and thus AI_Agency_Score) so the system reduces autonomy when accuracy drops. Lessons themselves are not the only input to the score but support qualitative learning (what to propose or avoid).
+
+### Rules for lessons learned
+
+- **Do not invent lessons**: Only use lessons that are **stored in the project’s Lessons_Learned** (or equivalent). Do not fabricate past outcomes.
+- **Update only when authorized**: Agents may **suggest** a lesson entry (e.g. after RCA or Request Alternate); the **human** approves or adds the final text. If the project allows the agent to append to Lessons_Learned.md (e.g. Level 1 or after Level 3 execution), do so in the agreed format; otherwise, output the suggested lesson for the human to paste.
+- **Use proactively**: When generating options or scenarios, **always check** for Lessons_Learned in the workspace and **cite or apply** relevant lessons so proposals improve over time.
+
+## Project Context
+
+- **Schedule/cost/risk/commissioning docs**: Use whatever files exist in the workspace for the active project (e.g. CPM_Development_Guide, Activities.csv, Relationships.csv, Risk_Register.md, Resources_Cost_Loading.md, BIM–P6 mapping, RFI log, **Lessons_Learned.md** or **lessons_learned/**). Naming and structure can vary by project; each agent’s skill describes common conventions.
+- **Lessons learned**: Read **Lessons_Learned.md** (or lessons_learned folder) when proposing options; use lessons to prioritize or avoid options and to suggest new entries after RCA or Request Alternate.
+- **P6 / CPM from PDF specs**: Use **project-controls-agent** (extract PDF → P6 development guide); **scheduling-agent** then owns the resulting schedule.

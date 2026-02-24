@@ -1,0 +1,17 @@
+# Vercel serverless: GET /api/status
+import json
+from http.server import BaseHTTPRequestHandler
+
+
+class handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        try:
+            from schedule_agent_web.main import get_status_dict
+            body = json.dumps(get_status_dict()).encode("utf-8")
+        except Exception as e:
+            body = json.dumps({"status": "error", "error": str(e)}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(body)

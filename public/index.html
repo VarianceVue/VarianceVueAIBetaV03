@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VueLogic — Schedule Agent</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --surface-hover: #243044;
+      --border: #2d3a4f;
+      --text: #e6edf3;
+      --text-muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #22c55e;
+      --warn: #eab308;
+      --error: #ef4444;
+      --user-msg: #1e3a5f;
+      --agent-msg: #1a2f1a;
+      --sidebar-w: 280px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .app-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .app-header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    .app-header .tagline { font-size: 0.8rem; color: var(--text-muted); margin-left: 0.5rem; }
+    .status-dots {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+    .status-dot { display: inline-flex; align-items: center; gap: 0.25rem; }
+    .status-dot::before {
+      content: '';
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .status-dot.ok::before { background: var(--success); }
+    .status-dot.warn::before { background: var(--warn); }
+    .status-dot.err::before { background: var(--error); }
+    .main-wrap {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+    .sidebar {
+      width: var(--sidebar-w);
+      min-width: 200px;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-tabs button {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .sidebar-tabs button:hover { color: var(--text); background: var(--surface-hover); }
+    .sidebar-tabs button.active { color: var(--accent); background: var(--bg); }
+    .sidebar-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.75rem;
+      display: none;
+    }
+    .sidebar-panel.active { display: block; }
+    .panel-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .upload-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .btn {
+      padding: 0.4rem 0.75rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+    #fileInput { display: none; }
+    .file-item, .lesson-item {
+      padding: 0.4rem 0.5rem;
+      margin-bottom: 0.35rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.8rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .file-item .name, .lesson-item .event { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .file-item .del, .lesson-item .del { cursor: pointer; color: var(--text-muted); font-weight: bold; }
+    .file-item .del:hover, .lesson-item .del:hover { color: var(--error); }
+    .trust-box {
+      padding: 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .trust-box .score { font-size: 1.25rem; font-weight: 600; color: var(--accent); }
+    .trust-box p { margin: 0.35rem 0 0; color: var(--text-muted); }
+    .trust-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+    .trust-actions .btn { flex: 1; }
+    .add-lesson-form { margin-top: 0.5rem; }
+    .add-lesson-form input, .add-lesson-form textarea {
+      width: 100%;
+      margin-bottom: 0.4rem;
+      padding: 0.35rem 0.5rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-size: 0.8rem;
+    }
+    .add-lesson-form textarea { min-height: 60px; resize: vertical; }
+    .add-lesson-form label { font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 0.15rem; }
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.5rem 2rem;
+      max-width: 56rem;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .msg {
+      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 8px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg.user { background: var(--user-msg); margin-left: 2rem; }
+    .msg.assistant { background: var(--agent-msg); margin-right: 2rem; }
+    .msg .role { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .msg.error { background: #3f1a1a; color: #fca5a5; }
+    .input-bar {
+      padding: 1rem 1.5rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .input-inner { max-width: 56rem; margin: 0 auto; display: flex; gap: 0.5rem; }
+    #input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 1rem;
+      resize: none;
+      min-height: 48px;
+      max-height: 200px;
+    }
+    #input:focus { outline: none; border-color: var(--accent); }
+    #input::placeholder { color: var(--text-muted); }
+    #send { padding: 0.75rem 1.25rem; background: var(--accent); color: white; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    #send:hover { background: var(--accent-hover); }
+    #send:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status-line { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; }
+    @media (max-width: 768px) {
+      .sidebar { width: 100%; min-width: 0; max-height: 40vh; }
+      .main-wrap { flex-direction: column; }
+    }
+
+    /* ── Auth screens ─────────────────────────────────── */
+    .auth-backdrop {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999;
+    }
+    .auth-backdrop.hidden { display: none; }
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2.5rem 2rem 2rem;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .auth-card h2 {
+      margin: 0 0 0.25rem;
+      font-size: 1.4rem;
+      text-align: center;
+    }
+    .auth-card .subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+    .auth-card label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+      margin-top: 0.75rem;
+    }
+    .auth-card label:first-of-type { margin-top: 0; }
+    .auth-card input {
+      width: 100%;
+      padding: 0.6rem 0.75rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+    .auth-card input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .auth-card input.input-error {
+      border-color: var(--error);
+    }
+    .auth-card .field-error {
+      color: var(--error);
+      font-size: 0.75rem;
+      margin-top: 0.2rem;
+      min-height: 1rem;
+    }
+    .auth-card .btn-auth {
+      width: 100%;
+      margin-top: 1.25rem;
+      padding: 0.7rem;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .auth-card .btn-auth:hover { background: var(--accent-hover); }
+    .auth-card .btn-auth:disabled { opacity: 0.6; cursor: not-allowed; }
+    .auth-card .switch-link {
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .auth-card .switch-link a {
+      color: var(--accent);
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .auth-card .switch-link a:hover { text-decoration: underline; }
+    .auth-card .auth-alert {
+      padding: 0.6rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    .auth-card .auth-alert.error {
+      display: block;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: #fca5a5;
+    }
+    .auth-card .auth-alert.success {
+      display: block;
+      background: rgba(34,197,94,0.15);
+      border: 1px solid rgba(34,197,94,0.3);
+      color: #86efac;
+    }
+    .auth-name-row {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .auth-name-row > div { flex: 1; }
+    .password-rules {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+      line-height: 1.4;
+    }
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .user-badge .name { font-weight: 600; color: var(--text); }
+    .user-badge .logout-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .user-badge .logout-btn:hover { color: var(--error); border-color: var(--error); }
+  </style>
+</head>
+<body>
+  <!-- ── Auth Screen ──────────────────────────────────── -->
+  <div id="authBackdrop" class="auth-backdrop">
+    <!-- Login Form -->
+    <div id="loginCard" class="auth-card">
+      <h2>VueLogic</h2>
+      <p class="subtitle">Sign in to your account</p>
+      <div id="loginAlert" class="auth-alert"></div>
+      <label for="loginEmail">Email address</label>
+      <input type="email" id="loginEmail" placeholder="you@company.com" autocomplete="email">
+      <div class="field-error" id="loginEmailErr"></div>
+      <label for="loginPassword">Password</label>
+      <input type="password" id="loginPassword" placeholder="Enter your password" autocomplete="current-password">
+      <div class="field-error" id="loginPasswordErr"></div>
+      <button type="button" class="btn-auth" id="loginBtn">Sign In</button>
+      <p class="switch-link">New here? <a id="showRegister">Create an account</a></p>
+    </div>
+
+    <!-- Registration Form -->
+    <div id="registerCard" class="auth-card" style="display:none">
+      <h2>Create Account</h2>
+      <p class="subtitle">Register with your business email</p>
+      <div id="registerAlert" class="auth-alert"></div>
+      <div class="auth-name-row">
+        <div>
+          <label for="regFirst">First name</label>
+          <input type="text" id="regFirst" placeholder="Jane" autocomplete="given-name">
+          <div class="field-error" id="regFirstErr"></div>
+        </div>
+        <div>
+          <label for="regLast">Last name</label>
+          <input type="text" id="regLast" placeholder="Smith" autocomplete="family-name">
+          <div class="field-error" id="regLastErr"></div>
+        </div>
+      </div>
+      <label for="regEmail">Business email</label>
+      <input type="email" id="regEmail" placeholder="you@company.com" autocomplete="email">
+      <div class="field-error" id="regEmailErr"></div>
+      <label for="regCompany">Company name</label>
+      <input type="text" id="regCompany" placeholder="Acme Corp" autocomplete="organization">
+      <div class="field-error" id="regCompanyErr"></div>
+      <label for="regPassword">Password</label>
+      <input type="password" id="regPassword" placeholder="Create a password" autocomplete="new-password">
+      <div class="field-error" id="regPasswordErr"></div>
+      <p class="password-rules">Min 8 chars, with uppercase, lowercase, and a digit.</p>
+      <label for="regConfirm">Confirm password</label>
+      <input type="password" id="regConfirm" placeholder="Re-enter your password" autocomplete="new-password">
+      <div class="field-error" id="regConfirmErr"></div>
+      <button type="button" class="btn-auth" id="registerBtn">Create Account</button>
+      <p class="switch-link">Already have an account? <a id="showLogin">Sign in</a></p>
+    </div>
+  </div>
+
+  <header class="app-header">
+    <div>
+      <h1>VueLogic</h1>
+      <span class="tagline">Schedule Agent — CPM, WBS, DCMA 14-Point, re-sequencing</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <div class="status-dots" id="statusDots">
+        <span class="status-dot" id="dotApi">API — …</span>
+        <span class="status-dot" id="dotPersist">Persistence — …</span>
+      </div>
+      <div class="user-badge" id="userBadge" style="display:none">
+        <span class="name" id="userDisplayName"></span>
+        <button type="button" class="logout-btn" id="logoutBtn">Sign out</button>
+      </div>
+    </div>
+  </header>
+  <div class="main-wrap">
+    <aside class="sidebar">
+      <div class="sidebar-tabs">
+        <button type="button" data-panel="files" class="active">Files</button>
+        <button type="button" data-panel="lessons">Lessons</button>
+        <button type="button" data-panel="trust">Trust</button>
+      </div>
+      <div id="panelFiles" class="sidebar-panel active">
+        <div class="panel-title">Uploaded files (this session)</div>
+        <div class="upload-row">
+          <button type="button" class="btn" id="uploadBtn">📎 Upload</button>
+          <input type="file" id="fileInput" accept=".csv,.md,.txt,.xlsx,.xls,.xer,.pdf">
+        </div>
+        <div id="filesList"></div>
+      </div>
+      <div id="panelLessons" class="sidebar-panel">
+        <div class="panel-title">Lessons learned</div>
+        <div id="lessonsList"></div>
+        <div class="add-lesson-form">
+          <label>Event</label>
+          <input type="text" id="lessonEvent" placeholder="e.g. Generator delay, Block B">
+          <label>What happened</label>
+          <input type="text" id="lessonWhat" placeholder="Option A chosen; Option B rejected">
+          <label>Lesson</label>
+          <textarea id="lessonText" placeholder="Double-shift effective for L2 testing"></textarea>
+          <button type="button" class="btn btn-sm" id="addLessonBtn">Add lesson</button>
+        </div>
+      </div>
+      <div id="panelTrust" class="sidebar-panel">
+        <div class="panel-title">Trust score (HITL)</div>
+        <div class="trust-box">
+          <div>Score: <span class="score" id="trustScore">—</span></div>
+          <p id="trustDetail">Approvals / Total proposals. Level 1 allowed if ≥ 0.8.</p>
+          <div class="trust-actions">
+            <button type="button" class="btn btn-sm" id="trustApprove">Approve</button>
+            <button type="button" class="btn btn-sm" id="trustDecline">Decline</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <main class="chat-area">
+      <div id="messages"></div>
+      <div class="input-bar">
+        <div class="input-inner">
+          <textarea id="input" placeholder="e.g. Generator #4 is 10 days late. Assess float and propose re-sequencing options." rows="1"></textarea>
+          <button type="button" id="send">Send</button>
+        </div>
+        <div class="status-line" id="status"></div>
+      </div>
+    </main>
+  </div>
+  <script>
+    const base = () => window.location.origin;
+
+    // ── Auth logic ─────────────────────────────────────
+    const AUTH_TOKEN_KEY = 'vuelogic_auth_token';
+    const AUTH_USER_KEY  = 'vuelogic_auth_user';
+
+    const BLOCKED_DOMAINS = new Set([
+      'gmail.com','yahoo.com','yahoo.co.uk','yahoo.co.in',
+      'hotmail.com','hotmail.co.uk','outlook.com','live.com',
+      'msn.com','aol.com','icloud.com','me.com','mac.com',
+      'mail.com','protonmail.com','proton.me','zoho.com',
+      'yandex.com','yandex.ru','gmx.com','gmx.net',
+      'inbox.com','fastmail.com','tutanota.com','tuta.io',
+      'mailinator.com','guerrillamail.com','tempmail.com',
+      'rocketmail.com','rediffmail.com',
+    ]);
+
+    function getAuthToken()  { return localStorage.getItem(AUTH_TOKEN_KEY); }
+    function getAuthUser()   { try { return JSON.parse(localStorage.getItem(AUTH_USER_KEY)); } catch { return null; } }
+    function setAuth(token, user) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    }
+    function clearAuth() {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+    }
+
+    function showAuthScreen() {
+      document.getElementById('authBackdrop').classList.remove('hidden');
+    }
+    function hideAuthScreen() {
+      document.getElementById('authBackdrop').classList.add('hidden');
+    }
+    function showLoginForm() {
+      document.getElementById('loginCard').style.display = '';
+      document.getElementById('registerCard').style.display = 'none';
+      clearFieldErrors('login');
+      document.getElementById('loginAlert').className = 'auth-alert';
+      document.getElementById('loginAlert').textContent = '';
+    }
+    function showRegisterForm() {
+      document.getElementById('loginCard').style.display = 'none';
+      document.getElementById('registerCard').style.display = '';
+      clearFieldErrors('register');
+      document.getElementById('registerAlert').className = 'auth-alert';
+      document.getElementById('registerAlert').textContent = '';
+    }
+
+    function clearFieldErrors(prefix) {
+      const ids = prefix === 'login'
+        ? ['loginEmailErr','loginPasswordErr']
+        : ['regFirstErr','regLastErr','regEmailErr','regCompanyErr','regPasswordErr','regConfirmErr'];
+      ids.forEach(id => { document.getElementById(id).textContent = ''; });
+      const inputs = prefix === 'login'
+        ? ['loginEmail','loginPassword']
+        : ['regFirst','regLast','regEmail','regCompany','regPassword','regConfirm'];
+      inputs.forEach(id => { document.getElementById(id).classList.remove('input-error'); });
+    }
+
+    function setFieldError(inputId, errId, msg) {
+      document.getElementById(errId).textContent = msg;
+      document.getElementById(inputId).classList.add('input-error');
+    }
+
+    function isValidEmail(email) {
+      return /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/.test(email);
+    }
+
+    function isBusinessEmail(email) {
+      const domain = email.split('@')[1]?.toLowerCase();
+      return domain && !BLOCKED_DOMAINS.has(domain);
+    }
+
+    document.getElementById('showRegister').addEventListener('click', showRegisterForm);
+    document.getElementById('showLogin').addEventListener('click', showLoginForm);
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      clearFieldErrors('login');
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      let valid = true;
+
+      if (!email) { setFieldError('loginEmail','loginEmailErr','Email is required.'); valid = false; }
+      else if (!isValidEmail(email)) { setFieldError('loginEmail','loginEmailErr','Invalid email format.'); valid = false; }
+
+      if (!password) { setFieldError('loginPassword','loginPasswordErr','Password is required.'); valid = false; }
+
+      if (!valid) return;
+
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      try {
+        const res = await fetch(base() + '/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          setAuth(data.token, data.user);
+          onAuthSuccess(data.user);
+        } else {
+          const alert = document.getElementById('loginAlert');
+          alert.className = 'auth-alert error';
+          alert.textContent = data.detail || data.error || 'Login failed.';
+        }
+      } catch (err) {
+        const alert = document.getElementById('loginAlert');
+        alert.className = 'auth-alert error';
+        alert.textContent = 'Network error — please try again.';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Sign In';
+      }
+    });
+
+    // Enter key submits login
+    ['loginEmail','loginPassword'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('loginBtn').click();
+      });
+    });
+
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+      clearFieldErrors('register');
+      const first   = document.getElementById('regFirst').value.trim();
+      const last    = document.getElementById('regLast').value.trim();
+      const email   = document.getElementById('regEmail').value.trim();
+      const company = document.getElementById('regCompany').value.trim();
+      const pwd     = document.getElementById('regPassword').value;
+      const confirm = document.getElementById('regConfirm').value;
+      let valid = true;
+
+      if (!first)   { setFieldError('regFirst','regFirstErr','Required.'); valid = false; }
+      if (!last)    { setFieldError('regLast','regLastErr','Required.'); valid = false; }
+      if (!email)   { setFieldError('regEmail','regEmailErr','Required.'); valid = false; }
+      else if (!isValidEmail(email)) { setFieldError('regEmail','regEmailErr','Invalid email format.'); valid = false; }
+      else if (!isBusinessEmail(email)) {
+        const domain = email.split('@')[1];
+        setFieldError('regEmail','regEmailErr','Personal emails (@' + domain + ') not allowed. Use a business email.');
+        valid = false;
+      }
+      if (!company) { setFieldError('regCompany','regCompanyErr','Required.'); valid = false; }
+      if (!pwd)     { setFieldError('regPassword','regPasswordErr','Required.'); valid = false; }
+      else {
+        if (pwd.length < 8) { setFieldError('regPassword','regPasswordErr','Min 8 characters.'); valid = false; }
+        else if (!/[A-Z]/.test(pwd)) { setFieldError('regPassword','regPasswordErr','Needs an uppercase letter.'); valid = false; }
+        else if (!/[a-z]/.test(pwd)) { setFieldError('regPassword','regPasswordErr','Needs a lowercase letter.'); valid = false; }
+        else if (!/\d/.test(pwd)) { setFieldError('regPassword','regPasswordErr','Needs a digit.'); valid = false; }
+      }
+      if (!confirm) { setFieldError('regConfirm','regConfirmErr','Required.'); valid = false; }
+      else if (pwd && pwd !== confirm) { setFieldError('regConfirm','regConfirmErr','Passwords do not match.'); valid = false; }
+
+      if (!valid) return;
+
+      const btn = document.getElementById('registerBtn');
+      btn.disabled = true; btn.textContent = 'Creating account…';
+      try {
+        const res = await fetch(base() + '/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ first_name: first, last_name: last, email, company, password: pwd }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          setAuth(data.token, data.user);
+          // Show success confirmation, then enter the app
+          const alert = document.getElementById('registerAlert');
+          alert.className = 'auth-alert success';
+          alert.textContent = 'Account created successfully! Welcome, ' + first + '. Redirecting…';
+          setTimeout(() => onAuthSuccess(data.user), 1500);
+        } else {
+          const alert = document.getElementById('registerAlert');
+          alert.className = 'auth-alert error';
+          alert.textContent = data.detail || data.error || 'Registration failed.';
+        }
+      } catch (err) {
+        const alert = document.getElementById('registerAlert');
+        alert.className = 'auth-alert error';
+        alert.textContent = 'Network error — please try again.';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Create Account';
+      }
+    });
+
+    // Enter key submits registration
+    ['regFirst','regLast','regEmail','regCompany','regPassword','regConfirm'].forEach(id => {
+      document.getElementById(id).addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('registerBtn').click();
+      });
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+      clearAuth();
+      document.getElementById('userBadge').style.display = 'none';
+      showAuthScreen();
+      showLoginForm();
+    });
+
+    function onAuthSuccess(user) {
+      hideAuthScreen();
+      const badge = document.getElementById('userBadge');
+      badge.style.display = 'flex';
+      document.getElementById('userDisplayName').textContent = user.first_name + ' ' + user.last_name;
+      initApp();
+    }
+
+    // On page load: check if already authenticated
+    (async function checkAuth() {
+      const token = getAuthToken();
+      const user = getAuthUser();
+      if (token && user) {
+        try {
+          const res = await fetch(base() + '/api/auth/me', {
+            headers: { 'Authorization': 'Bearer ' + token },
+          });
+          if (res.ok) {
+            onAuthSuccess(user);
+            return;
+          }
+        } catch (_) {}
+        clearAuth();
+      }
+      showAuthScreen();
+    })();
+
+    // ── Main app (runs after auth) ─────────────────────
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const statusEl = document.getElementById('status');
+
+    const SESSION_KEY = 'vuelogic_session_id';
+    function getSessionId() {
+      let id = localStorage.getItem(SESSION_KEY);
+      if (!id) {
+        id = 's-' + Math.random().toString(36).slice(2) + '-' + Date.now();
+        localStorage.setItem(SESSION_KEY, id);
+      }
+      return id;
+    }
+    let history = [];
+
+    function setStatus(t) { statusEl.textContent = t; }
+    function addMessage(role, content, isError = false) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + role + (isError ? ' error' : '');
+      const roleLabel = document.createElement('div');
+      roleLabel.className = 'role';
+      roleLabel.textContent = role === 'user' ? 'You' : 'VueLogic';
+      div.appendChild(roleLabel);
+      const pre = document.createElement('div');
+      pre.textContent = content || '(No response)';
+      div.appendChild(pre);
+      messagesEl.appendChild(div);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function refreshStatus() {
+      try {
+        const res = await fetch(base() + '/api/status');
+        const d = await res.json().catch(() => ({}));
+        const dotApi = document.getElementById('dotApi');
+        const dotPersist = document.getElementById('dotPersist');
+        dotApi.textContent = 'API — ' + (d.has_api_key ? 'OK' : 'No key');
+        dotApi.className = 'status-dot ' + (d.has_api_key ? 'ok' : 'err');
+        dotPersist.textContent = 'Persistence — ' + (d.persistence_available ? 'ON' : 'OFF');
+        dotPersist.className = 'status-dot ' + (d.persistence_available ? 'ok' : 'warn');
+      } catch (_) {
+        document.getElementById('dotApi').textContent = 'API — error';
+        document.getElementById('dotApi').className = 'status-dot err';
+      }
+    }
+
+    document.querySelectorAll('.sidebar-tabs button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.sidebar-tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const panel = document.getElementById('panel' + btn.dataset.panel.charAt(0).toUpperCase() + btn.dataset.panel.slice(1));
+        if (panel) panel.classList.add('active');
+      });
+    });
+
+    async function loadFiles() {
+      const listEl = document.getElementById('filesList');
+      listEl.innerHTML = '';
+      try {
+        const res = await fetch(base() + '/api/files?session_id=' + encodeURIComponent(getSessionId()));
+        if (res.ok) {
+          const files = await res.json();
+          files.forEach(f => {
+            const div = document.createElement('div');
+            div.className = 'file-item';
+            div.innerHTML = '<span class="name">' + escapeHtml(f.filename || '') + '</span><span class="del">×</span>';
+            div.querySelector('.del').addEventListener('click', () => deleteFile(f.filename));
+            listEl.appendChild(div);
+          });
+        }
+      } catch (_) {}
+    }
+    function escapeHtml(s) {
+      const d = document.createElement('div');
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function arrayBufferToBase64(buf) {
+      let binary = '';
+      const bytes = new Uint8Array(buf);
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      return btoa(binary);
+    }
+    document.getElementById('uploadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
+    document.getElementById('fileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) {
+        setStatus('File too large (max 10MB)');
+        return;
+      }
+      const isPdf = file.name.toLowerCase().endsWith('.pdf');
+      setStatus('Reading ' + file.name + '…');
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        setStatus('Uploading…');
+        let content = ev.target.result;
+        if (isPdf) content = arrayBufferToBase64(ev.target.result);
+        try {
+          const res = await fetch(base() + '/api/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: getSessionId(), filename: file.name, content: content }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && !data.error) {
+            setStatus('Uploaded: ' + file.name + (isPdf ? ' (scope of work)' : ''));
+            loadFiles();
+          } else {
+            setStatus('Upload failed: ' + (data.error || res.statusText || ''));
+          }
+        } catch (err) {
+          setStatus('Error: ' + err.message);
+        }
+      };
+      reader.onerror = () => setStatus('Failed to read file');
+      if (isPdf) reader.readAsArrayBuffer(file); else reader.readAsText(file, 'UTF-8');
+    });
+
+    async function deleteFile(filename) {
+      try {
+        const res = await fetch(base() + '/api/files?session_id=' + encodeURIComponent(getSessionId()) + '&filename=' + encodeURIComponent(filename), { method: 'DELETE' });
+        if (res.ok) loadFiles();
+      } catch (_) {}
+    }
+
+    async function loadLessons() {
+      const listEl = document.getElementById('lessonsList');
+      listEl.innerHTML = '';
+      try {
+        const res = await fetch(base() + '/api/lessons');
+        if (res.ok) {
+          const lessons = await res.json();
+          (lessons || []).forEach(l => {
+            const div = document.createElement('div');
+            div.className = 'lesson-item';
+            div.innerHTML = '<span class="event">' + escapeHtml(l.event || '') + '</span>';
+            listEl.appendChild(div);
+          });
+        }
+      } catch (_) {}
+    }
+    document.getElementById('addLessonBtn').addEventListener('click', async () => {
+      const event = document.getElementById('lessonEvent').value.trim();
+      const what = document.getElementById('lessonWhat').value.trim();
+      const lesson = document.getElementById('lessonText').value.trim();
+      if (!event && !lesson) return;
+      try {
+        const res = await fetch(base() + '/api/lessons', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event, what_happened: what, outcome: '', lesson, recommendation: '' }),
+        });
+        if (res.ok) {
+          document.getElementById('lessonEvent').value = '';
+          document.getElementById('lessonWhat').value = '';
+          document.getElementById('lessonText').value = '';
+          loadLessons();
+          setStatus('Lesson added');
+        } else {
+          const d = await res.json().catch(() => ({}));
+          setStatus('Failed: ' + (d.detail || res.statusText));
+        }
+      } catch (e) {
+        setStatus('Error: ' + e.message);
+      }
+    });
+
+    async function loadTrust() {
+      try {
+        const res = await fetch(base() + '/api/trust_score');
+        const d = await res.json().catch(() => ({}));
+        document.getElementById('trustScore').textContent = (d.ai_agency_score != null ? (Math.round(d.ai_agency_score * 100) / 100) : '—');
+        document.getElementById('trustDetail').textContent = 'Approvals: ' + (d.approvals || 0) + ', Total: ' + (d.total_proposals || 0) + '. Level 1 if ≥ 0.8.';
+      } catch (_) {}
+    }
+    document.getElementById('trustApprove').addEventListener('click', async () => {
+      try {
+        await fetch(base() + '/api/trust_score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ approved: true }),
+        });
+        loadTrust();
+        setStatus('Recorded: Approved');
+      } catch (_) {}
+    });
+    document.getElementById('trustDecline').addEventListener('click', async () => {
+      try {
+        await fetch(base() + '/api/trust_score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ approved: false }),
+        });
+        loadTrust();
+        setStatus('Recorded: Declined');
+      } catch (_) {}
+    });
+
+    async function send() {
+      const message = inputEl.value.trim();
+      if (!message) return;
+      addMessage('user', message);
+      history.push({ role: 'user', content: message });
+      inputEl.value = '';
+      sendBtn.disabled = true;
+      setStatus('Thinking…');
+      try {
+        const res = await fetch(base() + '/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, history: history.slice(0, -1), session_id: getSessionId() }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          addMessage('assistant', (data.detail || res.statusText || 'Request failed'), true);
+          setStatus('Error');
+          history.pop();
+          return;
+        }
+        const reply = data.reply || '';
+        const err = data.error;
+        if (err) {
+          addMessage('assistant', 'Error: ' + err, true);
+          setStatus('API error');
+        } else {
+          addMessage('assistant', reply);
+          history.push({ role: 'assistant', content: reply });
+          setStatus('');
+        }
+      } catch (e) {
+        addMessage('assistant', 'Network error: ' + e.message, true);
+        setStatus('Network error');
+        history.pop();
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+    sendBtn.addEventListener('click', send);
+    inputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+
+    let _appInitDone = false;
+    async function initApp() {
+      if (_appInitDone) return;
+      _appInitDone = true;
+      await refreshStatus();
+      loadFiles();
+      loadLessons();
+      loadTrust();
+      try {
+        const res = await fetch(base() + '/api/conversation?session_id=' + encodeURIComponent(getSessionId()));
+        if (res.ok) {
+          const conv = await res.json();
+          if (Array.isArray(conv) && conv.length > 0) {
+            history = conv;
+            conv.forEach(m => {
+              if (m && (m.role === 'user' || m.role === 'assistant'))
+                addMessage(m.role, m.content || '', false);
+            });
+          }
+        }
+      } catch (_) {}
+    }
+  </script>
+</body>
+</html>
