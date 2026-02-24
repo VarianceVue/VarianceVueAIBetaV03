@@ -31,7 +31,8 @@ except ImportError:
     bcrypt = None
 
 
-DB_DIR = Path(__file__).resolve().parent / "file_store"
+_ON_VERCEL = bool(os.environ.get("VERCEL"))
+DB_DIR = Path("/tmp/vuelogic") if _ON_VERCEL else Path(__file__).resolve().parent / "file_store"
 DB_PATH = DB_DIR / "users.db"
 
 JWT_SECRET = os.environ.get("VUELOGIC_JWT_SECRET", "")

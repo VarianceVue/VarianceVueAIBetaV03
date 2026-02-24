@@ -340,8 +340,11 @@ MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB per file (no practical limit for uplo
 # Local file fallback when Redis is not configured (e.g. run_desktop.bat without Upstash)
 def _file_store_dir():
     """Directory for local file store (used when Redis unavailable)."""
-    base = os.path.dirname(os.path.abspath(__file__))
-    out = os.path.join(base, "file_store")
+    if os.environ.get("VERCEL"):
+        out = "/tmp/vuelogic/file_store"
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+        out = os.path.join(base, "file_store")
     try:
         os.makedirs(out, exist_ok=True)
     except Exception:
