@@ -198,7 +198,7 @@
     }
     #customSidebar.visible { display: flex; }
     #root { margin-left: 0; transition: margin-left .15s; }
-    #root.sidebar-open { margin-left: 280px; }
+    #root.sidebar-open { margin-left: 280px; width: calc(100vw - 280px); overflow-x: hidden; }
 
     .sb-brand { padding: 2rem 1.5rem 1.25rem; }
     .sb-brand h1 { font-size: 1.6rem; font-weight: 900; color: #fff; margin: 0; letter-spacing: -0.03em; }
@@ -2193,12 +2193,12 @@
         const rHeader = document.querySelector('#root > div > main > header');
         if (rHeader) rHeader.style.display = '';
         const rMain = document.querySelector('#root > div > main');
-        if (rMain) { rMain.style.overflowY = ''; rMain.style.height = ''; }
+        if (rMain) { rMain.style.overflowY = ''; rMain.style.height = ''; rMain.style.maxWidth = ''; rMain.style.overflowX = ''; }
         const rRootInner = document.querySelector('#root > div');
-        if (rRootInner) { rRootInner.style.overflowY = ''; rRootInner.style.height = ''; }
+        if (rRootInner) { rRootInner.style.overflowY = ''; rRootInner.style.height = ''; rRootInner.style.maxWidth = ''; rRootInner.style.overflowX = ''; }
         const rContent = document.querySelector('#root > div > main > div');
         if (rContent) {
-          rContent.style.overflowY = ''; rContent.style.height = '';
+          rContent.style.overflowY = ''; rContent.style.height = ''; rContent.style.maxWidth = ''; rContent.style.boxSizing = '';
           Array.from(rContent.children).forEach(ch => { if (ch.style.display === 'none') ch.style.display = ''; });
         }
       }
@@ -2245,10 +2245,12 @@
       // Make content area and all ancestors scrollable
       contentArea.style.overflowY = 'auto';
       contentArea.style.height = '100%';
+      contentArea.style.maxWidth = '100%';
+      contentArea.style.boxSizing = 'border-box';
       const main = document.querySelector('#root > div > main');
-      if (main) { main.style.overflowY = 'auto'; main.style.height = '100vh'; }
+      if (main) { main.style.overflowY = 'auto'; main.style.height = '100vh'; main.style.maxWidth = '100%'; main.style.overflowX = 'hidden'; }
       const rootInner = document.querySelector('#root > div');
-      if (rootInner) { rootInner.style.overflowY = 'auto'; rootInner.style.height = '100vh'; }
+      if (rootInner) { rootInner.style.overflowY = 'auto'; rootInner.style.height = '100vh'; rootInner.style.maxWidth = '100%'; rootInner.style.overflowX = 'hidden'; }
 
       // Hide the React header (shows "DASHBOARD")
       const header = document.querySelector('#root > div > main > header');
