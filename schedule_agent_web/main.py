@@ -3433,22 +3433,19 @@ def handle_chat_json(message: str, history: list, session_id: str | None = None)
     return {"reply": reply, "error": err}
 
 
-# Serve frontend locally (on Vercel, public/ is served by CDN)
-if not os.environ.get("VERCEL"):
-    static_dir = Path(__file__).resolve().parent / "static"
-    if static_dir.exists():
-        # Built VueLogic UI uses /assets/ for JS/CSS; serve them so the page isn't blank
-        assets_dir = static_dir / "assets"
-        if assets_dir.exists():
-            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
-        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+static_dir = Path(__file__).resolve().parent / "static"
+if static_dir.exists():
+    assets_dir = static_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-        @app.get("/")
-        def index():
-            return FileResponse(
-                static_dir / "index.html",
-                headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
-            )
+    @app.get("/")
+    def index():
+        return FileResponse(
+            static_dir / "index.html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate", "Pragma": "no-cache"},
+        )
 
 
 if __name__ == "__main__":
