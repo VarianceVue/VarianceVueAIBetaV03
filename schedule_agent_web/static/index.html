@@ -402,7 +402,7 @@
       font-family: 'Inter', system-ui, sans-serif;
     }
     #updPage.visible { display: block; }
-    #cpmLandingPage, #govPage, #basisPage, #playbookPage, #intelPage {
+    #cpmLandingPage, #govPage, #basisPage, #playbookPage, #intelPage, #dashPage {
       display: none; position: fixed;
       top: 0; left: 280px; right: 0; bottom: 0;
       z-index: 99986; overflow-y: auto;
@@ -410,7 +410,7 @@
       font-family: 'Inter', system-ui, sans-serif;
     }
     #cpmLandingPage.visible, #govPage.visible, #basisPage.visible,
-    #playbookPage.visible, #intelPage.visible { display: block; }
+    #playbookPage.visible, #intelPage.visible, #dashPage.visible { display: block; }
     .sp-card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-top: 1.5rem; }
     .sp-card {
       background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
@@ -1683,6 +1683,9 @@
       </div>
     </div>
 
+    <!-- ── PCM Dashboard Overlay ────────────────────── -->
+    <div id="dashPage"></div>
+
     <!-- ── Dashboard Chat Widget ─────────────────────── -->
     <div id="dashChatWrap">
       <div id="dashChat">
@@ -2142,8 +2145,6 @@
 
     function updateOverlays() {
       const isDash = (_sbLevel === 'top' && _sbActive === 'dashboard');
-      $('dashChatWrap').classList.toggle('visible', isDash);
-      if (isDash) _mountDashChat();
 
       const isBlr = (_sbLevel === 'cpm' && _sbActive === 'baseline-review');
       const isRes = (_sbLevel === 'cpm' && _sbActive === 'review-results');
@@ -2155,8 +2156,10 @@
       const isIntel = (_sbLevel === 'cpm' && _sbActive === 'intelligence');
       const isLib = (_sbLevel === 'top' && _sbActive === 'library');
       const isCr = (_sbLevel === 'top' && _sbActive === 'conv-review');
-      const customPage = isBlr || isRes || isUpd || isCpmLanding || isGov || isBasis || isPlaybook || isIntel;
+      const customPage = isDash || isBlr || isRes || isUpd || isCpmLanding || isGov || isBasis || isPlaybook || isIntel;
 
+      $('dashPage').classList.toggle('visible', isDash);
+      $('dashChatWrap').classList.toggle('visible', isDash);
       $('blrPage').classList.toggle('visible', isBlr);
       $('blrResultsPage').classList.toggle('visible', isRes);
       $('updPage').classList.toggle('visible', isUpd);
@@ -2167,40 +2170,17 @@
       $('intelPage').classList.toggle('visible', isIntel);
 
       if (isDash) {
-        $('libPage').classList.remove('visible');
-        $('convReviewPage').classList.remove('visible');
-        $('libPage').classList.add('dash-embed');
-        $('convReviewPage').classList.add('dash-embed');
-        _mountDashSections();
+        _mountDashPage();
         loadLibrary();
         loadConvReview();
       } else {
-        // Move back to body when leaving dashboard
+        const dp = $('dashPage');
         const lib = $('libPage');
         const cr = $('convReviewPage');
-        if (lib && lib.classList.contains('dash-embed')) { document.body.appendChild(lib); }
-        if (cr && cr.classList.contains('dash-embed')) { document.body.appendChild(cr); }
+        if (lib && lib.parentNode === dp) { document.body.appendChild(lib); }
+        if (cr && cr.parentNode === dp) { document.body.appendChild(cr); }
         lib.classList.remove('dash-embed');
         cr.classList.remove('dash-embed');
-        // Clean up dashboard-injected elements
-        const dld = document.getElementById('dashLibDivider');
-        const dcd = document.getElementById('dashCrDivider');
-        const dh = document.getElementById('pcmDashHeader');
-        if (dld) dld.remove();
-        if (dcd) dcd.remove();
-        if (dh) dh.remove();
-        // Restore React header and overflow
-        const rHeader = document.querySelector('#root > div > main > header');
-        if (rHeader) rHeader.style.display = '';
-        const rMain = document.querySelector('#root > div > main');
-        if (rMain) { rMain.style.overflowY = ''; rMain.style.height = ''; rMain.style.maxWidth = ''; rMain.style.overflowX = ''; }
-        const rRootInner = document.querySelector('#root > div');
-        if (rRootInner) { rRootInner.style.overflowY = ''; rRootInner.style.height = ''; rRootInner.style.maxWidth = ''; rRootInner.style.overflowX = ''; }
-        const rContent = document.querySelector('#root > div > main > div');
-        if (rContent) {
-          rContent.style.overflowY = ''; rContent.style.height = ''; rContent.style.maxWidth = ''; rContent.style.boxSizing = '';
-          Array.from(rContent.children).forEach(ch => { if (ch.style.display === 'none') ch.style.display = ''; });
-        }
       }
 
       if (isBlr) loadBlrStatus();
@@ -2233,41 +2213,13 @@
     }
 
     const _dashObserver = new MutationObserver(() => {
-      if (_sbLevel === 'top' && _sbActive === 'dashboard') { _hideReactDashboardSections(); _mountDashChat(); _mountDashSections(); }
       _hideUnwantedReactCards();
     });
     _dashObserver.observe(document.getElementById('root'), { childList: true, subtree: true });
 
-    function _hideReactDashboardSections() {
-      const contentArea = document.querySelector('#root > div > main > div');
-      if (!contentArea) return;
-
-      // Make content area and all ancestors scrollable
-      contentArea.style.overflowY = 'auto';
-      contentArea.style.height = '100%';
-      contentArea.style.maxWidth = '100%';
-      contentArea.style.boxSizing = 'border-box';
-      const main = document.querySelector('#root > div > main');
-      if (main) { main.style.overflowY = 'auto'; main.style.height = '100vh'; main.style.maxWidth = '100%'; main.style.overflowX = 'hidden'; }
-      const rootInner = document.querySelector('#root > div');
-      if (rootInner) { rootInner.style.overflowY = 'auto'; rootInner.style.height = '100vh'; rootInner.style.maxWidth = '100%'; rootInner.style.overflowX = 'hidden'; }
-
-      // Hide the React header (shows "DASHBOARD")
-      const header = document.querySelector('#root > div > main > header');
-      if (header) header.style.display = 'none';
-
-      const _keepIds = new Set(['dashChatWrap','libPage','convReviewPage','pcmDashHeader','dashLibDivider','dashCrDivider']);
-      Array.from(contentArea.children).forEach(child => {
-        if (_keepIds.has(child.id)) return;
-        child.style.display = 'none';
-      });
-    }
-
-    function _mountDashChat() {
-      const contentArea = document.querySelector('#root > div > main > div');
-      const chat = $('dashChatWrap');
-      if (!contentArea || !chat) return;
-      _hideReactDashboardSections();
+    function _mountDashPage() {
+      const dp = $('dashPage');
+      if (!dp) return;
 
       if (!document.getElementById('pcmDashHeader')) {
         const proj = getActiveProject();
@@ -2283,19 +2235,12 @@
           </div>
           <div style="margin-left:auto;font-size:0.72rem;color:#94a3b8;font-family:Inter,system-ui,sans-serif">${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div>
         `;
-        contentArea.insertBefore(hdr, contentArea.firstChild);
+        dp.appendChild(hdr);
       }
 
-      if (chat.parentNode !== contentArea) {
-        const hdr = document.getElementById('pcmDashHeader');
-        contentArea.insertBefore(chat, hdr ? hdr.nextSibling : contentArea.firstChild);
-      }
-      if (typeof loadDashGreeting === 'function') loadDashGreeting();
-    }
+      const chat = $('dashChatWrap');
+      if (chat && chat.parentNode !== dp) dp.appendChild(chat);
 
-    function _mountDashSections() {
-      const contentArea = document.querySelector('#root > div > main > div');
-      if (!contentArea) return;
       const lib = $('libPage');
       const cr = $('convReviewPage');
 
@@ -2303,17 +2248,19 @@
         const d = document.createElement('div');
         d.id = 'dashLibDivider';
         d.style.cssText = 'border-top:1px solid #e2e8f0;margin:1.5rem 0 1rem;';
-        contentArea.appendChild(d);
+        dp.appendChild(d);
       }
-      if (lib && lib.parentNode !== contentArea) contentArea.appendChild(lib);
+      if (lib && lib.parentNode !== dp) { lib.classList.add('dash-embed'); dp.appendChild(lib); }
 
       if (!document.getElementById('dashCrDivider')) {
         const d = document.createElement('div');
         d.id = 'dashCrDivider';
         d.style.cssText = 'border-top:1px solid #e2e8f0;margin:1.5rem 0 1rem;';
-        contentArea.appendChild(d);
+        dp.appendChild(d);
       }
-      if (cr && cr.parentNode !== contentArea) contentArea.appendChild(cr);
+      if (cr && cr.parentNode !== dp) { cr.classList.add('dash-embed'); dp.appendChild(cr); }
+
+      if (typeof loadDashGreeting === 'function') loadDashGreeting();
     }
 
     function formatBytes(b) {
