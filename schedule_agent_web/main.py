@@ -1399,21 +1399,31 @@ def api_library_verify(session_id: str = ""):
             "status": "ok",
         }
 
+        updates = {}
         if not qdrant_up:
             if meta_says:
-                update_file_meta(session_id, fname, vectorized=False)
+                updates["vectorized"] = False
                 entry["status"] = "corrected_to_false"
                 corrected += 1
             else:
                 entry["status"] = "qdrant_unavailable"
         elif meta_says and not actually_vectorized:
-            update_file_meta(session_id, fname, vectorized=False)
+            updates["vectorized"] = False
             entry["status"] = "corrected_to_false"
             corrected += 1
         elif not meta_says and actually_vectorized:
-            update_file_meta(session_id, fname, vectorized=True)
+            updates["vectorized"] = True
             entry["status"] = "corrected_to_true"
             corrected += 1
+
+        if not f.get("category"):
+            cat = _auto_category_from_filename(fname)
+            if cat:
+                updates["category"] = cat
+                corrected += 1
+
+        if updates:
+            update_file_meta(session_id, fname, **updates)
 
         results.append(entry)
 

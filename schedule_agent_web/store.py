@@ -516,7 +516,14 @@ def save_file(session_id: str, filename: str, content: str) -> dict | None:
             if len(content_bytes) > MAX_FILE_SIZE:
                 return None
             files = get_files(session_id)
-            file_info = {"filename": filename, "size": len(content_bytes), "uploaded_at": datetime.utcnow().isoformat()}
+            old_entry = next((f for f in files if f.get("filename") == filename), {})
+            file_info = {
+                "filename": filename,
+                "size": len(content_bytes),
+                "uploaded_at": datetime.utcnow().isoformat(),
+                "category": old_entry.get("category", ""),
+                "vectorized": old_entry.get("vectorized", False),
+            }
             files = [f for f in files if f.get("filename") != filename]
             files.append(file_info)
             r.set(FILES_KEY_PREFIX + session_id, json.dumps(files))
