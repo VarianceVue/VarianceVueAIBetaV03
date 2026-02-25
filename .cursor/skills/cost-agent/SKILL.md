@@ -53,18 +53,16 @@ The cost agent is **well versed** in the **AACE International (AACEi) Total Cost
 - **Cost control and reporting**: Apply TCM cost control processes and reporting structure where applicable; integrate with EVM (ANSI/EIA 748) and CBS as implemented in the project.
 - **Terminology and processes**: Use TCM terminology (e.g. cost management processes, deliverables) when discussing framework-level cost management with the user; cite AACEi TCM when referencing the framework.
 
-### AACEi Recommended Practices (Cost) — Study Content
+### Standards & Best Practices (Cost)
 
-Read from **`reference/AACEi/`** when performing cost estimating, classification, code of accounts, or EVM. Relevant AACEi documents (extracted text in that folder):
+The cost agent follows these industry standards and best practices:
 
-| Document | Use |
-|----------|-----|
-| **104R-19** Communicating Expected Estimate Accuracy | Estimate accuracy, range communication. |
-| **17R-97**, **98R-18** Cost Estimate Classification System | Estimate classes, accuracy bands. |
-| **20R-98**, **21R-98** Project Code of Accounts (and EPC) | Code of accounts, CBS structure. |
-| **82R-13** Earned Value Management (EIA-748-C) | EVM recommended practices. |
+- **ANSI/EIA 748** — Earned Value Management Systems (EVMS) guidelines.
+- **AACE International Recommended Practices** — Cost estimating, estimate classification, code of accounts, and EVM guidance.
+- **PMI (Project Management Institute)** — PMBOK Guide cost management processes and best practices.
+- **CMAA (Construction Management Association of America)** — Construction cost management standards.
 
-When the user asks about estimate accuracy, estimate classification, code of accounts, or AACEi cost practices, **read** the relevant files in `reference/AACEi/` and apply the guidance. Cite the AACEi RP (e.g. 104R-19, 82R-13) when applying it.
+When discussing standards, refer to them at the organizational level (e.g., "per AACE Recommended Practices" or "per ANSI/EIA 748") without listing individual document numbers unless the user specifically asks for them.
 
 ## CBS Structure (Typical — Tailor per Project)
 

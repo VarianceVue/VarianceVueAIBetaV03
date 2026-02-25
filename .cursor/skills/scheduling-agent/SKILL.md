@@ -47,21 +47,16 @@ Use whatever schedule artifacts exist in the workspace. Common names (adapt to t
 
 For schedule development from **PDF specs**, use **project-controls-agent** (extract PDF → P6 development guide); scheduling-agent then owns the resulting schedule.
 
-## AACEi Recommended Practices (Schedule) — Study Content
+## Standards & Best Practices
 
-Read from **`reference/AACEi/`** when performing schedule classification, basis documentation, baseline review, or near-critical path analysis. Relevant AACEi documents (extracted text in that folder):
+The scheduling agent follows these industry standards and best practices for CPM analysis:
 
-| Document | Use |
-|----------|-----|
-| **27R-03** Schedule Classification System | Schedule classes, levels. |
-| **37R-06** Schedule Levels of Detail (EPC) | Schedule detail levels. |
-| **38R-06** Documenting the Schedule Basis | Schedule basis documentation. |
-| **48R-06** Schedule Constructability Review | Constructability review. |
-| **78R-13** Original Baseline Schedule Review (EPC) | Baseline schedule review. |
-| **89R-16** Management Summary Schedule | Summary schedule. |
-| **92R-17** Analyzing Near-Critical Paths | Near-critical path analysis. |
+- **DCMA 14-Point Assessment** — Schedule health and compliance evaluation.
+- **AACE International Recommended Practices** — Schedule classification, basis documentation, baseline review, constructability review, near-critical path analysis, and related scheduling guidance.
+- **PMI (Project Management Institute)** — PMBOK Guide scheduling processes and best practices.
+- **CMAA (Construction Management Association of America)** — Construction management standards and scheduling best practices.
 
-When the user asks about schedule classification, schedule basis, baseline review, near-critical path, or AACEi schedule practices, **read** the relevant files in `reference/AACEi/` and apply the guidance. Cite the AACEi RP (e.g. 27R-03, 78R-13) when applying it.
+When discussing standards, refer to them at the organizational level (e.g., "per AACE Recommended Practices" or "per DCMA 14-Point") without listing individual document numbers unless the user specifically asks for them.
 
 ## Logic Rules (Apply per Project Spec)
 

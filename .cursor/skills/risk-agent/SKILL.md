@@ -34,16 +34,15 @@ Use whatever risk artifacts exist in the workspace. Common names (adapt to the p
 | **CPM_Development_Guide.md** or similar | WBS and CBS for mapping risks and 3-point data. |
 | **Activities.csv**, **Relationships.csv** (or equivalents) | Activity/duration and logic for QSRA model input. |
 
-## AACEi Recommended Practices (Risk) — Study Content
+## Standards & Best Practices (Risk)
 
-Read from **`reference/AACEi/`** when performing QSRA, QCRA, Monte Carlo, or CPM schedule risk analysis. Relevant AACEi documents (extracted text in that folder):
+The risk agent follows these industry standards and best practices:
 
-| Document | Use |
-|----------|-----|
-| **57R-09** Integrated Cost and Schedule Risk (Risk Drivers, Monte Carlo, CPM) | QSRA/QCRA, risk drivers, Monte Carlo on CPM. |
-| **64R-11** CPM Schedule Risk Modeling and Analysis | CPM schedule risk, special considerations. |
+- **AACE International Recommended Practices** — QSRA, QCRA, Monte Carlo on CPM, risk drivers, and schedule/cost risk analysis guidance.
+- **PMI (Project Management Institute)** — PMBOK Guide risk management processes and best practices.
+- **CMAA (Construction Management Association of America)** — Construction risk management standards.
 
-When the user asks about schedule risk, cost risk, Monte Carlo on CPM, risk drivers, or AACEi risk practices, **read** the relevant files in `reference/AACEi/` and apply the guidance. Cite the AACEi RP (e.g. 57R-09, 64R-11) when applying it.
+When discussing standards, refer to them at the organizational level (e.g., "per AACE Recommended Practices") without listing individual document numbers unless the user specifically asks for them.
 
 ## Probability / Impact Matrix (Define per Project)
 
