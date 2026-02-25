@@ -2101,12 +2101,29 @@
     };
 
     function clickReactTab(label) {
-      const btns = document.querySelectorAll('#root aside nav button, #root aside nav > button');
-      for (const b of btns) {
-        if (b.textContent.trim().toLowerCase() === label.toLowerCase()) {
-          b.click();
-          return true;
+      const find = (lbl) => {
+        const btns = document.querySelectorAll('#root aside nav button');
+        for (const b of btns) {
+          if (b.textContent.trim().toLowerCase() === lbl.toLowerCase()) return b;
         }
+        return null;
+      };
+      const direct = find(label);
+      if (direct) { direct.click(); return true; }
+
+      const workspaceTabs = ['activity list', 'gantt view', 'health audit', 'schedule philosophy', 'ingestion'];
+      if (workspaceTabs.includes(label.toLowerCase())) {
+        const cpm = find('CPM Schedule');
+        if (cpm) cpm.click();
+        setTimeout(() => {
+          const ws = find('Schedule Workspace');
+          if (ws) ws.click();
+          setTimeout(() => {
+            const target = find(label);
+            if (target) target.click();
+          }, 30);
+        }, 30);
+        return true;
       }
       return false;
     }

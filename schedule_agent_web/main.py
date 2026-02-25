@@ -1850,6 +1850,18 @@ def api_baseline_submit(request: BaselineSubmitRequest):
             save_file(request.session_id, resp_store, request.resp_content)
             update_file_meta(request.session_id, resp_store, category="Contractor Response")
 
+    def _sync_xer_to_schedule(xer_content: str):
+        """Parse XER and save as the session's schedule for Activity List / Gantt."""
+        try:
+            xer_text = _decode_xer_content(xer_content)
+            tables = _parse_xer_tables(xer_text)
+            if tables.get("TASK"):
+                sched = _xer_tables_to_schedule(tables)
+                from schedule_agent_web.store import save_schedule
+                save_schedule(request.session_id, sched)
+        except Exception:
+            pass
+
     if request.version:
         existing = get_submission(request.session_id, request.version, stype)
         if not existing:
@@ -1866,6 +1878,8 @@ def api_baseline_submit(request: BaselineSubmitRequest):
             updates["resp_filename"] = request.resp_filename
             updates["resp_size"] = request.resp_size
         _save_files(ver)
+        if request.xer_content:
+            _sync_xer_to_schedule(request.xer_content)
         sub = update_submission(request.session_id, ver, stype, **updates)
         return {"ok": True, "submission": sub, "updated": True}
 
@@ -1892,6 +1906,8 @@ def api_baseline_submit(request: BaselineSubmitRequest):
     )
     ver = sub["version"]
     _save_files(ver)
+    if request.xer_content:
+        _sync_xer_to_schedule(request.xer_content)
     return {"ok": True, "submission": sub}
 
 
@@ -1908,6 +1924,92 @@ def _decode_xer_content(raw: str) -> str:
         except Exception:
             pass
     return raw
+
+
+def _xer_tables_to_schedule(tables: dict, project_name: str = "Imported from XER") -> dict:
+    """Convert parsed XER tables into the schedule format used by Activity List / Gantt View."""
+    wbs_map: dict[str, str] = {}
+    wbs_list = []
+    for w in tables.get("PROJWBS", []):
+        wbs_id = w.get("wbs_id", "")
+        short = w.get("wbs_short_name", "")
+        name = w.get("wbs_name", short)
+        if wbs_id:
+            wbs_map[wbs_id] = short or wbs_id
+        if short or name:
+            wbs_list.append({"code": short or wbs_id, "name": name or short})
+
+    pred_map: dict[str, list[dict]] = {}
+    pred_type_map = {"PR_FS": "FS", "PR_SS": "SS", "PR_FF": "FF", "PR_SF": "SF"}
+    task_id_to_code: dict[str, str] = {}
+
+    for t in tables.get("TASK", []):
+        tid = t.get("task_id", "")
+        code = t.get("task_code", "")
+        if tid and code:
+            task_id_to_code[tid] = code
+
+    for p in tables.get("TASKPRED", []):
+        tid = p.get("task_id", "")
+        pred_id = p.get("pred_task_id", "")
+        ptype = pred_type_map.get(p.get("pred_type", ""), "FS")
+        lag_hrs = 0
+        try:
+            lag_hrs = int(float(p.get("lag_hr_cnt", 0)))
+        except (ValueError, TypeError):
+            pass
+        lag_days = round(lag_hrs / 8) if lag_hrs else 0
+        pred_code = task_id_to_code.get(pred_id, pred_id)
+        if tid:
+            pred_map.setdefault(tid, []).append({
+                "activityId": pred_code,
+                "type": ptype,
+                "lag": lag_days,
+            })
+
+    activities = []
+    for t in tables.get("TASK", []):
+        tid = t.get("task_id", "")
+        code = t.get("task_code", "") or tid
+        name = t.get("task_name", "Unnamed")
+        wbs_code = wbs_map.get(t.get("wbs_id", ""), "")
+        dur_hrs = 0
+        try:
+            dur_hrs = int(float(t.get("target_drtn_hr_cnt", 0)))
+        except (ValueError, TypeError):
+            pass
+        dur_days = max(1, round(dur_hrs / 8)) if dur_hrs else 0
+        tf_hrs = 0
+        try:
+            tf_hrs = int(float(t.get("total_float_hr_cnt", 0)))
+        except (ValueError, TypeError):
+            pass
+        tf_days = round(tf_hrs / 8) if tf_hrs else 0
+        is_critical = tf_days <= 0
+
+        ttype = t.get("task_type", "")
+        if ttype in ("TT_Mile", "TT_FinMile", "TT_WBS"):
+            dur_days = 0
+
+        activities.append({
+            "id": code,
+            "name": name,
+            "durationDays": dur_days,
+            "totalFloatDays": tf_days,
+            "wbsCode": wbs_code,
+            "predecessors": pred_map.get(tid, []),
+            "isCritical": is_critical,
+            "healthFlags": [],
+            "directCost": 0,
+            "indirectCost": 0,
+            "isHardCost": True,
+        })
+
+    proj = tables.get("PROJECT", [])
+    if proj and proj[0].get("proj_short_name"):
+        project_name = proj[0]["proj_short_name"]
+
+    return {"projectName": project_name, "activities": activities, "wbs": wbs_list}
 
 
 def _parse_xer_tables(xer_text: str) -> dict[str, list[dict]]:
@@ -3237,8 +3339,27 @@ def api_get_schedule(session_id: str = ""):
     if not session_id:
         return None
     try:
-        from schedule_agent_web.store import get_schedule
-        return get_schedule(session_id) or None
+        from schedule_agent_web.store import get_schedule, save_schedule, get_files, get_file_content
+        sched = get_schedule(session_id)
+        if sched and sched.get("activities"):
+            return sched
+
+        files = get_files(session_id)
+        xer_files = sorted(
+            [f for f in files if f.get("filename", "").endswith(".xer")],
+            key=lambda f: f.get("uploaded_at", ""),
+            reverse=True,
+        )
+        if xer_files:
+            xer_content = get_file_content(session_id, xer_files[0]["filename"])
+            if xer_content:
+                xer_text = _decode_xer_content(xer_content)
+                tables = _parse_xer_tables(xer_text)
+                if tables.get("TASK"):
+                    recovered = _xer_tables_to_schedule(tables)
+                    save_schedule(session_id, recovered)
+                    return recovered
+        return sched
     except Exception:
         return None
 
