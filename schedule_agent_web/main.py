@@ -124,7 +124,7 @@ def get_system_prompt_with_context(session_id: str | None = None) -> str:
         # Include uploaded files whenever session_id is provided (works with Redis or local file store)
         if session_id:
             files = get_files(session_id)
-            user_files = [f for f in files if not f.get("filename", "").startswith("_")]
+            user_files = [f for f in files if _user_visible_file(f)]
             if user_files:
                 vec_count = sum(1 for f in user_files if f.get("vectorized"))
                 parts.append(
@@ -432,7 +432,7 @@ def api_greeting(session_id: str = ""):
         from schedule_agent_web.store import get_pending_digest, get_approved_log
 
         files = get_files(session_id)
-        user_files = [f for f in files if not f.get("filename", "").startswith("_")]
+        user_files = [f for f in files if _user_visible_file(f)]
         vec_count = sum(1 for f in user_files if f.get("vectorized"))
 
         if user_files:
@@ -933,7 +933,7 @@ def api_get_files(session_id: str = ""):
         return []
     try:
         from schedule_agent_web.store import get_files
-        return [f for f in get_files(session_id) if not f.get("filename", "").startswith("_")]
+        return [f for f in get_files(session_id) if _user_visible_file(f)]
     except Exception:
         return []
 
@@ -944,6 +944,12 @@ def _library_display_name(filename: str) -> str | None:
     """Convert versioned baseline/update filenames to user-friendly display names.
     Returns None for truly internal files that should stay hidden."""
     import re
+    m = re.match(r"^_baseline_review_v(\d+)$", filename)
+    if m:
+        return f"Baseline Review v{m.group(1)}"
+    m = re.match(r"^_baseline_exception_v(\d+)$", filename)
+    if m:
+        return f"Exception Report v{m.group(1)}"
     m = re.match(r"^(?:baseline|update)_v\d+_(?:resp_)?(.+)$", filename)
     if m:
         return m.group(1)
@@ -1225,7 +1231,7 @@ def api_library_list(session_id: str = ""):
     seen_display: set[str] = set()
     for f in all_files:
         fname = f.get("filename", "")
-        if fname.startswith("_"):
+        if not _user_visible_file(f):
             continue
         display = _library_display_name(fname) or fname
         if display in seen_display:
@@ -1289,9 +1295,25 @@ def api_library_upload(request: LibraryUploadRequest):
 
 
 def _is_user_visible_internal(filename: str) -> bool:
-    """Check if a _-prefixed file is user-visible (legacy support)."""
+    """Check if a _-prefixed file should appear in user-facing file lists."""
     import re
-    return bool(re.match(r"^_baseline_v\d+_", filename) or filename.startswith("_specs_"))
+    if re.match(r"^_baseline_review_v\d+$", filename):
+        return True
+    if re.match(r"^_baseline_exception_v\d+$", filename):
+        return True
+    if re.match(r"^_baseline_v\d+_", filename):
+        return True
+    if filename.startswith("_specs_"):
+        return True
+    return False
+
+
+def _user_visible_file(f: dict) -> bool:
+    """Return True if a file should appear in user-facing file lists."""
+    fname = f.get("filename", "")
+    if not fname.startswith("_"):
+        return True
+    return _is_user_visible_internal(fname)
 
 
 @app.put("/api/library/category")
@@ -1549,6 +1571,11 @@ async def api_upload_file(request: FileUploadRequest):
 
 def _auto_category_from_filename(filename: str) -> str:
     """Best-guess category from filename and extension."""
+    import re
+    if re.match(r"^_baseline_review_v\d+$", filename):
+        return "Baseline Review"
+    if re.match(r"^_baseline_exception_v\d+$", filename):
+        return "Exception Report"
     lower = filename.lower()
     ext = lower.rsplit(".", 1)[-1] if "." in lower else ""
     if ext == "xer":
@@ -1625,7 +1652,7 @@ def api_baseline_status(session_id: str = ""):
         return {"filename": f.get("filename", ""), "size": f.get("size", 0),
                 "uploaded_at": f.get("uploaded_at", ""), "category": f.get("category", "")}
 
-    all_project_files = [f for f in store_files if not f.get("filename", "").startswith("_")]
+    all_project_files = [f for f in store_files if _user_visible_file(f)]
     scope_file_list = [_file_entry(f) for f in all_project_files if f.get("category", "") in _scope_cats]
     baseline_file_list = [_file_entry(f) for f in all_project_files if f.get("category", "") in _baseline_cats]
     update_file_list = [_file_entry(f) for f in all_project_files if f.get("category", "") in _update_cats]
@@ -3225,7 +3252,7 @@ def api_extract_schedule(request: ExtractScheduleRequest):
     if not get_status_dict().get("has_api_key"):
         raise HTTPException(status_code=503, detail="Set OPENAI_API_KEY or ANTHROPIC_API_KEY in environment.")
     from schedule_agent_web.store import get_files
-    files = [f for f in get_files(request.session_id) if not f.get("filename", "").startswith("_")]
+    files = [f for f in get_files(request.session_id) if _user_visible_file(f)]
     if not files:
         try:
             from schedule_agent_web.ingestion import list_ingested_documents, get_ingested_document
