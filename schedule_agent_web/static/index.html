@@ -951,8 +951,9 @@
       .sp-card-grid { grid-template-columns: 1fr; }
       .sp-two-col { grid-template-columns: 1fr; }
 
+      .blr-card { overflow: visible; }
       .blr-card-header { padding: 0.85rem 1rem; }
-      .blr-card-body { padding: 1rem; }
+      .blr-card-body { padding: 1rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .blr-dropzone { padding: 1.25rem; }
 
       .gantt-label { width: 140px; }
@@ -1005,7 +1006,7 @@
       .blr-title { font-size: 0.85rem; letter-spacing: 0.04em; }
       .blr-subtitle { font-size: 0.68rem; margin-bottom: 1rem; }
       .blr-card-header h3 { font-size: 0.68rem; }
-      .blr-card-body { padding: 0.85rem; }
+      .blr-card-body { padding: 0.85rem; overflow-x: auto; -webkit-overflow-scrolling: touch; }
       .blr-dropzone { padding: 1rem; }
       .blr-dropzone p { font-size: 0.68rem; }
 
@@ -1014,11 +1015,8 @@
       .blr-submit-msg { text-align: center; }
 
       .blr-htable, .blrr-table, .sp-table, .lib-table, .act-table {
-        display: block; overflow-x: auto; -webkit-overflow-scrolling: touch;
+        min-width: 700px;
       }
-      .blr-htable, .blrr-table, .sp-table { min-width: 600px; }
-      .act-table { min-width: 700px; }
-      .lib-table { min-width: 500px; }
 
       .blr-success-card { margin: 1rem; padding: 1.5rem 1.25rem; }
       .blr-success-actions { flex-direction: column; }
