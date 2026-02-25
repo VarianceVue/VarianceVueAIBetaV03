@@ -2222,18 +2222,38 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
         exception_count=exception_count, exception_filepath=exception_filepath,
     )
 
+    # Persist review comments JSON in Redis so View on Screen works after cold starts
     try:
-        from schedule_agent_web.vector_store import index_file
-        review_text = "\n".join(
-            f"[{c.get('Comment ID','')}] {c.get('Priority','')} | {c.get('Logic Flag','')} | "
-            f"WBS: {c.get('WBS Reference','')} | {c.get(next((k for k in c if k.startswith('Comment Description')), ''),'')} | "
-            f"Spec: {c.get('Spec Section Reference','')} | "
-            f"Rec: {c.get(next((k for k in c if k.startswith('Recommendation')), ''), '')}"
-            for c in comments
-        )
-        index_file(request.session_id, f"_baseline_review_v{ver}", review_text)
+        from schedule_agent_web.store import save_file as _save_file_fn
+        _save_file_fn(request.session_id, f"_baseline_review_v{ver}_comments.json", json.dumps(comments))
     except Exception:
         pass
+
+    review_doc_name = f"_baseline_review_v{ver}"
+    review_text = "\n".join(
+        f"[{c.get('Comment ID','')}] {c.get('Priority','')} | {c.get('Logic Flag','')} | "
+        f"WBS: {c.get('WBS Reference','')} | {c.get(next((k for k in c if k.startswith('Comment Description')), ''),'')} | "
+        f"Spec: {c.get('Spec Section Reference','')} | "
+        f"Rec: {c.get(next((k for k in c if k.startswith('Recommendation')), ''), '')}"
+        for c in comments
+    )
+    try:
+        from schedule_agent_web.store import save_file, update_file_meta
+        save_file(request.session_id, review_doc_name, review_text)
+        update_file_meta(request.session_id, review_doc_name, category="Baseline Review")
+    except Exception:
+        pass
+    vectorized = False
+    try:
+        from schedule_agent_web.vector_store import index_file
+        vectorized = index_file(request.session_id, review_doc_name, review_text)
+    except Exception:
+        pass
+    if vectorized:
+        try:
+            update_file_meta(request.session_id, review_doc_name, vectorized=True)
+        except Exception:
+            pass
 
     return {"ok": True, "review": meta, "comments": comments, "has_prev_comments": has_prev_comments}
 
@@ -2353,18 +2373,31 @@ def api_baseline_review_exceptions(request: ExceptionReportRequest):
             exception_filepath=exception_filepath,
         )
 
-    try:
-        from schedule_agent_web.vector_store import index_file
-        if exception_count > 0:
-            exc_text = "\n".join(
-                f"[{e.get('Exception ID','')}] {e.get('Original Comment ID','')} | "
-                f"WBS: {e.get('WBS Reference','')} | {e.get('Evidence from XER','')} | "
-                f"Severity: {e.get('Severity','')}"
-                for e in exceptions
-            )
-            index_file(request.session_id, f"_baseline_exception_v{ver}", exc_text)
-    except Exception:
-        pass
+    if exception_count > 0:
+        exc_doc_name = f"_baseline_exception_v{ver}"
+        exc_text = "\n".join(
+            f"[{e.get('Exception ID','')}] {e.get('Original Comment ID','')} | "
+            f"WBS: {e.get('WBS Reference','')} | {e.get('Evidence from XER','')} | "
+            f"Severity: {e.get('Severity','')}"
+            for e in exceptions
+        )
+        try:
+            from schedule_agent_web.store import save_file as _sf, update_file_meta as _ufm
+            _sf(request.session_id, exc_doc_name, exc_text)
+            _ufm(request.session_id, exc_doc_name, category="Exception Report")
+        except Exception:
+            pass
+        exc_vectorized = False
+        try:
+            from schedule_agent_web.vector_store import index_file
+            exc_vectorized = index_file(request.session_id, exc_doc_name, exc_text)
+        except Exception:
+            pass
+        if exc_vectorized:
+            try:
+                _ufm(request.session_id, exc_doc_name, vectorized=True)
+            except Exception:
+                pass
 
     return {"ok": True, "exception_count": exception_count, "exceptions": exceptions}
 
@@ -2383,13 +2416,25 @@ def api_baseline_review_download(session_id: str = "", version: int = 0):
     """Download review comments Excel file."""
     if not session_id or not version:
         raise HTTPException(status_code=400, detail="session_id and version required")
-    from schedule_agent_web.baseline import get_review
+    from schedule_agent_web.baseline import get_review, save_review_result
     review = get_review(session_id, version)
     if not review:
         raise HTTPException(status_code=404, detail=f"No review found for v{version}")
     filepath = review["filepath"]
     if not os.path.isfile(filepath):
-        raise HTTPException(status_code=404, detail="Review file not found on disk.")
+        try:
+            from schedule_agent_web.store import get_file_content
+            raw = get_file_content(session_id, f"_baseline_review_v{version}_comments.json")
+            if raw:
+                comments = json.loads(raw)
+                columns = review.get("columns", [])
+                if not columns and comments:
+                    columns = list(comments[0].keys())
+                filepath = save_review_result(session_id, version, comments, columns)
+        except Exception:
+            pass
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="Review file not found. Please discard and re-execute the review.")
     fname = os.path.basename(filepath)
     return FileResponse(filepath, filename=fname, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -2404,27 +2449,42 @@ def api_baseline_review_view(session_id: str = "", version: int = 0):
     if not review:
         raise HTTPException(status_code=404, detail=f"No review found for v{version}")
     filepath = review["filepath"]
-    if not os.path.isfile(filepath):
-        raise HTTPException(status_code=404, detail="Review file not found on disk.")
+
+    # Try loading from Excel file on disk first
+    if os.path.isfile(filepath):
+        try:
+            from openpyxl import load_workbook
+            wb = load_workbook(filepath, read_only=True)
+            ws = wb.active
+            rows = list(ws.iter_rows(values_only=True))
+            wb.close()
+            if rows:
+                columns = [str(c) if c else "" for c in rows[0]]
+                comments = []
+                for row in rows[1:]:
+                    comment = {}
+                    for i, col in enumerate(columns):
+                        val = row[i] if i < len(row) else None
+                        comment[col] = val if val is not None else ""
+                    comments.append(comment)
+                return {"columns": columns, "comments": comments, "version": version}
+        except Exception:
+            pass
+
+    # Fallback: load from Redis-persisted JSON
     try:
-        from openpyxl import load_workbook
-        wb = load_workbook(filepath, read_only=True)
-        ws = wb.active
-        rows = list(ws.iter_rows(values_only=True))
-        wb.close()
-        if not rows:
-            return {"columns": [], "comments": []}
-        columns = [str(c) if c else "" for c in rows[0]]
-        comments = []
-        for row in rows[1:]:
-            comment = {}
-            for i, col in enumerate(columns):
-                val = row[i] if i < len(row) else None
-                comment[col] = val if val is not None else ""
-            comments.append(comment)
-        return {"columns": columns, "comments": comments, "version": version}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read review file: {e}")
+        from schedule_agent_web.store import get_file_content
+        raw = get_file_content(session_id, f"_baseline_review_v{version}_comments.json")
+        if raw:
+            comments = json.loads(raw)
+            columns = review.get("columns", [])
+            if not columns and comments:
+                columns = list(comments[0].keys())
+            return {"columns": columns, "comments": comments, "version": version}
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=404, detail="Review file not found. The file may have been lost after a server restart. Please discard and re-execute the review.")
 
 
 @app.get("/api/baseline/review/exception/download")
