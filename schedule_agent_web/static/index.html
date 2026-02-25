@@ -426,7 +426,8 @@
       font-family: 'Inter', system-ui, sans-serif;
     }
     #updPage.visible { display: block; }
-    #cpmLandingPage, #govPage, #basisPage, #playbookPage, #intelPage, #dashPage {
+    #cpmLandingPage, #govPage, #basisPage, #playbookPage, #intelPage, #dashPage,
+    #activityPage, #ganttPage {
       display: none; position: fixed;
       top: 0; left: 280px; right: 0; bottom: 0;
       z-index: 99986; overflow-y: auto;
@@ -434,7 +435,36 @@
       font-family: 'Inter', system-ui, sans-serif;
     }
     #cpmLandingPage.visible, #govPage.visible, #basisPage.visible,
-    #playbookPage.visible, #intelPage.visible, #dashPage.visible { display: block; }
+    #playbookPage.visible, #intelPage.visible, #dashPage.visible,
+    #activityPage.visible, #ganttPage.visible { display: block; }
+    .act-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    .act-table th { background: #0f172a; color: #fff; padding: 0.75rem 1rem; text-align: left;
+      font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+    .act-table th:first-child { border-radius: 0.75rem 0 0 0; }
+    .act-table th:last-child { border-radius: 0 0.75rem 0 0; }
+    .act-table td { padding: 0.65rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.82rem; color: #334155; }
+    .act-table tr:hover td { background: #f8fafc; }
+    .act-crit { color: #e11d48; font-weight: 800; }
+    .act-id { color: #2563eb; font-weight: 800; font-size: 0.75rem; }
+    .act-wbs { color: #94a3b8; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .act-pred-pill { display: inline-flex; align-items: center; gap: 3px; background: #f1f5f9; border: 1px solid #e2e8f0;
+      padding: 2px 8px; border-radius: 999px; font-size: 0.68rem; font-weight: 700; color: #64748b; margin: 1px; }
+    .act-pred-id { color: #2563eb; }
+    .act-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; }
+    .act-dot-crit { background: #e11d48; box-shadow: 0 0 6px rgba(225,29,72,0.3); }
+    .act-dot-norm { background: #cbd5e1; }
+    .act-empty { text-align: center; padding: 5rem 2rem; color: #94a3b8; font-weight: 800;
+      text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.8rem; }
+    .gantt-row { display: flex; align-items: center; margin-bottom: 4px; }
+    .gantt-label { width: 220px; flex-shrink: 0; padding-right: 10px; }
+    .gantt-label-name { font-size: 0.75rem; font-weight: 800; color: #1e293b; text-transform: uppercase;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+    .gantt-label-id { font-size: 0.6rem; color: #94a3b8; font-weight: 700; }
+    .gantt-track { flex: 1; height: 26px; background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 6px; position: relative; }
+    .gantt-bar { position: absolute; height: 14px; top: 5px; border-radius: 4px; min-width: 4px;
+      font-size: 0.55rem; font-weight: 800; color: #fff; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+    .gantt-bar-crit { background: #e11d48; }
+    .gantt-bar-norm { background: #2563eb; }
     .sp-card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; margin-top: 1.5rem; }
     .sp-card {
       background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
@@ -1707,6 +1737,20 @@
       </div>
     </div>
 
+    <!-- ── Activity List Page ──────────────────────── -->
+    <div id="activityPage">
+      <h1 class="blr-title">Activity List</h1>
+      <p class="blr-subtitle">Activities parsed from your uploaded baseline XER schedule.</p>
+      <div id="activityContent"></div>
+    </div>
+
+    <!-- ── Gantt View Page ───────────────────────── -->
+    <div id="ganttPage">
+      <h1 class="blr-title">Gantt View</h1>
+      <p class="blr-subtitle">Visual timeline of schedule activities.</p>
+      <div id="ganttContent"></div>
+    </div>
+
     <!-- ── PCM Dashboard Overlay ────────────────────── -->
     <div id="dashPage"></div>
 
@@ -2228,7 +2272,9 @@
       const isIntel = (_sbLevel === 'cpm' && _sbActive === 'intelligence');
       const isLib = (_sbLevel === 'top' && _sbActive === 'library');
       const isCr = (_sbLevel === 'top' && _sbActive === 'conv-review');
-      const customPage = isDash || isBlr || isRes || isUpd || isCpmLanding || isGov || isBasis || isPlaybook || isIntel;
+      const isAct = (_sbLevel === 'workspace' && _sbActive === 'activities');
+      const isGantt = (_sbLevel === 'workspace' && _sbActive === 'gantt');
+      const customPage = isDash || isBlr || isRes || isUpd || isCpmLanding || isGov || isBasis || isPlaybook || isIntel || isAct || isGantt;
 
       $('dashPage').classList.toggle('visible', isDash);
       $('dashChatWrap').classList.toggle('visible', isDash);
@@ -2240,6 +2286,11 @@
       $('basisPage').classList.toggle('visible', isBasis);
       $('playbookPage').classList.toggle('visible', isPlaybook);
       $('intelPage').classList.toggle('visible', isIntel);
+      $('activityPage').classList.toggle('visible', isAct);
+      $('ganttPage').classList.toggle('visible', isGantt);
+
+      if (isAct) loadActivityPage();
+      if (isGantt) loadGanttPage();
 
       if (isDash) {
         _mountDashPage();
@@ -2370,6 +2421,126 @@
     let _blrXerFile = null;
     let _blrNarrFile = null;
     let _blrRespFile = null;
+    // ═════════════════════════════════════════════════════
+    //  ACTIVITY LIST & GANTT VIEW
+    // ═════════════════════════════════════════════════════
+    let _scheduleCache = null;
+
+    async function _fetchSchedule() {
+      const proj = getActiveProject();
+      if (!proj) return null;
+      try {
+        const res = await fetch(API + '/api/schedule?session_id=' + encodeURIComponent(proj.project_id), { headers: authHeaders() });
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (data && data.activities && data.activities.length > 0) {
+          _scheduleCache = data;
+          return data;
+        }
+      } catch(e) {}
+      return null;
+    }
+
+    async function loadActivityPage() {
+      const el = $('activityContent');
+      el.innerHTML = '<p style="color:#64748b;font-size:0.85rem;font-weight:600">Loading activities...</p>';
+      const data = await _fetchSchedule();
+      if (!data || !data.activities || data.activities.length === 0) {
+        el.innerHTML = '<div class="act-empty">No activities found. Upload a baseline XER file in Contractor Baseline Review to populate.</div>';
+        return;
+      }
+      const acts = data.activities;
+      let html = '<div style="background:#fff;border-radius:1.5rem;border:1px solid #e2e8f0;box-shadow:0 4px 24px rgba(0,0,0,0.06);overflow:hidden">';
+      html += '<div style="overflow-x:auto"><table class="act-table"><thead><tr>';
+      html += '<th>Activity ID</th><th>Activity Name</th><th style="text-align:center">Dur (d)</th><th>Predecessors</th><th style="text-align:center">TF (d)</th>';
+      html += '</tr></thead><tbody>';
+      for (const a of acts) {
+        const crit = a.isCritical || (a.totalFloatDays !== undefined && a.totalFloatDays <= 0);
+        const dotCls = crit ? 'act-dot act-dot-crit' : 'act-dot act-dot-norm';
+        let predsHtml = '';
+        if (a.predecessors && a.predecessors.length > 0) {
+          predsHtml = a.predecessors.map(p => {
+            let lagStr = '';
+            if (p.lag && p.lag !== 0) lagStr = '<span style="color:' + (p.lag < 0 ? '#e11d48' : '#059669') + '">' + (p.lag > 0 ? '+' : '') + p.lag + 'd</span>';
+            return '<span class="act-pred-pill"><span class="act-pred-id">' + esc(p.activityId || '') + '</span> ' + esc(p.type || 'FS') + ' ' + lagStr + '</span>';
+          }).join(' ');
+        } else {
+          predsHtml = '<span style="font-size:0.7rem;font-weight:700;color:#f43f5e;text-transform:uppercase;letter-spacing:0.03em">Start / Open</span>';
+        }
+        html += '<tr>';
+        html += '<td><span class="' + dotCls + '"></span><span class="act-id">' + esc(a.id || '') + '</span></td>';
+        html += '<td><div><span style="font-weight:800;font-size:0.82rem;color:#1e293b;text-transform:uppercase;letter-spacing:-0.01em">' + esc(a.name || '') + '</span>';
+        if (a.wbsCode) html += '<br><span class="act-wbs">' + esc(a.wbsCode) + '</span>';
+        html += '</div></td>';
+        html += '<td style="text-align:center"><span style="background:#f1f5f9;padding:3px 10px;border-radius:6px;font-weight:800;font-size:0.78rem;color:#334155">' + (a.durationDays || 0) + '</span></td>';
+        html += '<td>' + predsHtml + '</td>';
+        const tfVal = a.totalFloatDays !== undefined ? a.totalFloatDays : 0;
+        html += '<td style="text-align:center" class="' + (crit ? 'act-crit' : '') + '">' + tfVal + 'd</td>';
+        html += '</tr>';
+      }
+      html += '</tbody></table></div></div>';
+      html += '<p style="margin-top:0.75rem;font-size:0.7rem;color:#94a3b8;font-weight:600">' + acts.length + ' activities &bull; parsed from XER</p>';
+      el.innerHTML = html;
+    }
+
+    async function loadGanttPage() {
+      const el = $('ganttContent');
+      el.innerHTML = '<p style="color:#64748b;font-size:0.85rem;font-weight:600">Loading gantt chart...</p>';
+      const data = _scheduleCache || await _fetchSchedule();
+      if (!data || !data.activities || data.activities.length === 0) {
+        el.innerHTML = '<div class="act-empty">No activities found. Upload a baseline XER file in Contractor Baseline Review to populate.</div>';
+        return;
+      }
+      const acts = data.activities;
+      const actMap = new Map();
+      acts.forEach(a => actMap.set(a.id, a));
+
+      const getES = (id, visited) => {
+        if (!visited) visited = new Set();
+        if (visited.has(id)) return 0;
+        visited.add(id);
+        const a = actMap.get(id);
+        if (!a || !a.predecessors || a.predecessors.length === 0) return 0;
+        let mx = 0;
+        for (const p of a.predecessors) {
+          const pred = actMap.get(p.activityId);
+          if (pred) {
+            const ps = getES(p.activityId, visited);
+            const pf = ps + (Number(pred.durationDays) || 0) + (Number(p.lag) || 0);
+            if (pf > mx) mx = pf;
+          }
+        }
+        return mx;
+      };
+
+      const scheduled = acts.map(a => ({ ...a, startDay: getES(a.id) })).sort((a, b) => a.startDay - b.startDay);
+      const maxDays = Math.max(30, ...scheduled.map(a => a.startDay + (Number(a.durationDays) || 1)));
+
+      let html = '<div style="background:#fff;border-radius:1.5rem;border:1px solid #e2e8f0;box-shadow:0 4px 24px rgba(0,0,0,0.06);padding:1.5rem;overflow-x:auto">';
+      html += '<div style="min-width:700px">';
+      html += '<div style="display:flex;border-bottom:1px solid #f1f5f9;padding-bottom:0.75rem;margin-bottom:0.75rem">';
+      html += '<div style="width:220px;font-size:0.6rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:0.1em">Activity</div>';
+      html += '<div style="flex:1;position:relative;height:16px">';
+      for (let i = 0; i < 5; i++) {
+        const dayLabel = Math.round((i / 4) * maxDays);
+        html += '<div style="position:absolute;left:' + (i * 25) + '%;font-size:0.55rem;color:#94a3b8;font-weight:800;border-left:1px solid #f1f5f9;padding-left:4px">Day ' + dayLabel + '</div>';
+      }
+      html += '</div></div>';
+
+      for (const a of scheduled) {
+        const crit = a.isCritical || (a.totalFloatDays !== undefined && a.totalFloatDays <= 0);
+        const leftPct = (a.startDay / maxDays) * 100;
+        const widthPct = Math.max(0.5, ((Number(a.durationDays) || 1) / maxDays) * 100);
+        html += '<div class="gantt-row">';
+        html += '<div class="gantt-label"><div class="gantt-label-name">' + esc(a.name || '') + '</div><div class="gantt-label-id">' + esc(a.id || '') + '</div></div>';
+        html += '<div class="gantt-track"><div class="gantt-bar ' + (crit ? 'gantt-bar-crit' : 'gantt-bar-norm') + '" style="left:' + leftPct + '%;width:' + widthPct + '%">' + (a.durationDays || 0) + 'd</div></div>';
+        html += '</div>';
+      }
+      html += '</div></div>';
+      html += '<p style="margin-top:0.75rem;font-size:0.7rem;color:#94a3b8;font-weight:600">' + acts.length + ' activities &bull; ' + maxDays + ' days total</p>';
+      el.innerHTML = html;
+    }
+
     let _blrReviews = [];
 
     async function loadBlrStatus() {
@@ -3880,9 +4051,13 @@
         nav.appendChild(sbSection('Schedule Workspace'));
 
         nav.appendChild(sbBtn(ICONS.philosophy, 'Schedule Philosophy', () => activateReactTab('Philosophy', 'philosophy'), { active: _sbActive === 'philosophy' }));
-        nav.appendChild(sbBtn(ICONS.activities, 'Activity List', () => activateReactTab('Activity List', 'activities'), { active: _sbActive === 'activities' }));
+        nav.appendChild(sbBtn(ICONS.activities, 'Activity List', () => {
+          _sbActive = 'activities'; updateOverlays(); renderSidebar();
+        }, { active: _sbActive === 'activities' }));
         nav.appendChild(sbBtn(ICONS.health, 'Health Audit', () => activateReactTab('Health Audit', 'health'), { active: _sbActive === 'health' }));
-        nav.appendChild(sbBtn(ICONS.gantt, 'Gantt View', () => activateReactTab('Gantt View', 'gantt'), { active: _sbActive === 'gantt' }));
+        nav.appendChild(sbBtn(ICONS.gantt, 'Gantt View', () => {
+          _sbActive = 'gantt'; updateOverlays(); renderSidebar();
+        }, { active: _sbActive === 'gantt' }));
       }
     }
 
@@ -4604,13 +4779,12 @@
               const _goto = sessionStorage.getItem('_vl_goto');
               if (_goto) {
                 sessionStorage.removeItem('_vl_goto');
-                const [gSbId, gLabel] = _goto.split('|');
+                const [gSbId] = _goto.split('|');
                 _sbLevel = 'workspace';
                 _sbActive = gSbId;
                 hideOverlay();
                 updateOverlays();
                 renderSidebar();
-                setTimeout(() => clickReactTab(gLabel), 200);
               } else {
                 _sbLevel = 'top';
                 _sbActive = 'dashboard';
