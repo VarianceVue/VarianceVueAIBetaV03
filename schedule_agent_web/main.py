@@ -1678,9 +1678,64 @@ def api_baseline_status(session_id: str = ""):
                     specs["from_library"] = True
             library_specs = spec_candidates
 
-    from schedule_agent_web.baseline import next_expected_version
+    from schedule_agent_web.baseline import next_expected_version, create_submission as _bl_create
     baseline_subs = list_submissions(session_id, "baseline")
     update_subs = list_submissions(session_id, "update")
+
+    # Auto-recover: detect baseline/update XER files in Redis that have no matching submission
+    import re
+    _xer_pattern = re.compile(r"^(baseline|update)_v(\d+)_(.+\.xer)$", re.IGNORECASE)
+    _narr_pattern = re.compile(r"^(baseline|update)_v(\d+)_(.+)$", re.IGNORECASE)
+    _existing_keys = set()
+    for s in baseline_subs + update_subs:
+        _existing_keys.add((s.get("submission_type", "baseline"), s.get("version", 0)))
+
+    for f in all_project_files:
+        fname = f.get("filename", "")
+        m = _xer_pattern.match(fname)
+        if not m:
+            continue
+        stype, ver_str, orig_name = m.group(1), m.group(2), m.group(3)
+        ver = int(ver_str)
+        if (stype, ver) in _existing_keys:
+            continue
+        narr_name = None
+        narr_size = 0
+        for nf in all_project_files:
+            nfn = nf.get("filename", "")
+            nm = _narr_pattern.match(nfn)
+            if nm and nm.group(1) == stype and int(nm.group(2)) == ver and not nfn.lower().endswith(".xer") and "_resp_" not in nfn:
+                narr_name = nm.group(3)
+                narr_size = nf.get("size", 0)
+                break
+        try:
+            from schedule_agent_web.baseline import _redis_get_subs, _redis_save_subs
+            entry = {
+                "submission_type": stype,
+                "version": ver,
+                "xer_filename": orig_name,
+                "xer_size": f.get("size", 0),
+                "narr_filename": narr_name,
+                "narr_size": narr_size,
+                "resp_filename": None,
+                "resp_size": 0,
+                "submitted_at": f.get("uploaded_at", ""),
+                "status": "Under Review",
+            }
+            r_subs = _redis_get_subs(session_id)
+            r_subs.append(entry)
+            _redis_save_subs(session_id, r_subs)
+            _existing_keys.add((stype, ver))
+            if stype == "baseline":
+                baseline_subs.append(entry)
+            else:
+                update_subs.append(entry)
+        except Exception:
+            pass
+
+    baseline_subs.sort(key=lambda s: s.get("version", 0), reverse=True)
+    update_subs.sort(key=lambda s: s.get("version", 0), reverse=True)
+
     baseline_next_ver = next_expected_version(session_id, "baseline")
     update_next_ver = next_expected_version(session_id, "update")
 
