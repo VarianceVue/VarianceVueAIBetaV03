@@ -25,6 +25,24 @@ def _get_redis():
         return None
 
 
+def _file_store_dir():
+    """Directory for local file store (used when Redis unavailable)."""
+    if os.environ.get("VERCEL"):
+        out = "/tmp/vuelogic/file_store"
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+        out = os.path.join(base, "file_store")
+    try:
+        os.makedirs(out, exist_ok=True)
+    except Exception:
+        pass
+    return out
+
+
+def _safe_session(session_id: str) -> str:
+    return "".join(c if c.isalnum() or c in "-_" else "_" for c in (session_id or "default"))
+
+
 # --- Conversation (persisted so agent can learn from all chat) ---
 CONV_KEY_PREFIX = "vuelogic:conv:"
 CONV_MAX_LEN = 100
@@ -32,8 +50,7 @@ CONV_MAX_LEN = 100
 
 def _conv_local_path(session_id: str) -> str:
     """Path to conversation.json for this session (used when Redis unavailable)."""
-    base = os.path.dirname(os.path.abspath(__file__))
-    store = os.path.join(base, "file_store")
+    store = _file_store_dir()
     safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in (session_id or "default"))
     return os.path.join(store, safe, "conversation.json")
 
@@ -201,8 +218,7 @@ def is_persistence_available() -> bool:
 # --- Conversation Digest (PCM review & vectorization governance) ---
 
 def _digest_dir(session_id: str) -> str:
-    base = os.path.dirname(os.path.abspath(__file__))
-    d = os.path.join(base, "file_store", _safe_session(session_id), "digests")
+    d = os.path.join(_file_store_dir(), _safe_session(session_id), "digests")
     os.makedirs(d, exist_ok=True)
     return d
 
@@ -336,24 +352,6 @@ def purge_expired_discards(session_id: str) -> int:
 # --- Files (project documents) ---
 FILES_KEY_PREFIX = "vuelogic:files:"
 MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB per file (no practical limit for uploads)
-
-# Local file fallback when Redis is not configured (e.g. run_desktop.bat without Upstash)
-def _file_store_dir():
-    """Directory for local file store (used when Redis unavailable)."""
-    if os.environ.get("VERCEL"):
-        out = "/tmp/vuelogic/file_store"
-    else:
-        base = os.path.dirname(os.path.abspath(__file__))
-        out = os.path.join(base, "file_store")
-    try:
-        os.makedirs(out, exist_ok=True)
-    except Exception:
-        pass
-    return out
-
-
-def _safe_session(session_id: str) -> str:
-    return "".join(c if c.isalnum() or c in "-_" else "_" for c in (session_id or "default"))
 
 
 def _safe_filename(filename: str) -> str:
