@@ -7,7 +7,7 @@ Each project (session_id) can have:
   - Submissions are auto-versioned: v1, v2, v3 …
   - Each submission can have one review result (Excel comments)
 
-Schema lives in baseline_review.db alongside users.db.
+Uses Redis (Upstash) for persistence on Vercel; SQLite as local fallback.
 """
 import os
 import io
@@ -20,6 +20,18 @@ _ON_VERCEL = bool(os.environ.get("VERCEL"))
 _BASE_DIR = "/tmp/vuelogic" if _ON_VERCEL else os.path.dirname(os.path.abspath(__file__))
 os.makedirs(_BASE_DIR, exist_ok=True)
 _DB_PATH = os.path.join(_BASE_DIR, "baseline_review.db")
+
+# Redis keys for baseline persistence
+_BL_SPECS_PREFIX = "vuelogic:bl_specs:"
+_BL_SUBS_PREFIX = "vuelogic:bl_subs:"
+_BL_REVIEWS_PREFIX = "vuelogic:bl_reviews:"
+
+def _get_redis():
+    try:
+        from schedule_agent_web.store import _get_redis as _store_redis
+        return _store_redis()
+    except Exception:
+        return None
 
 
 def _get_db():
@@ -94,6 +106,14 @@ def _get_db():
 # ── Contract Specs ────────────────────────────────────────
 
 def get_specs(session_id: str) -> Optional[dict]:
+    r = _get_redis()
+    if r:
+        try:
+            raw = r.get(_BL_SPECS_PREFIX + session_id)
+            if raw:
+                return json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            pass
     db = _get_db()
     row = db.execute(
         "SELECT filename, size, uploaded_at FROM contract_specs WHERE session_id = ?",
@@ -106,18 +126,55 @@ def get_specs(session_id: str) -> Optional[dict]:
 
 
 def save_specs_meta(session_id: str, filename: str, size: int) -> dict:
-    db = _get_db()
     now = datetime.now(timezone.utc).isoformat()
+    result = {"filename": filename, "size": size, "uploaded_at": now}
+    r = _get_redis()
+    if r:
+        try:
+            r.set(_BL_SPECS_PREFIX + session_id, json.dumps(result))
+        except Exception:
+            pass
+    db = _get_db()
     db.execute(
         "INSERT OR REPLACE INTO contract_specs (session_id, filename, size, uploaded_at) VALUES (?, ?, ?, ?)",
         (session_id, filename, size, now),
     )
     db.commit()
     db.close()
-    return {"filename": filename, "size": size, "uploaded_at": now}
+    return result
 
 
-# ── Baseline Submissions ─────────────────────────────────
+# ── Baseline Submissions (Redis + SQLite) ─────────────────
+
+def _redis_subs_key(session_id: str) -> str:
+    return _BL_SUBS_PREFIX + session_id
+
+def _redis_get_subs(session_id: str) -> list[dict]:
+    r = _get_redis()
+    if not r:
+        return []
+    try:
+        raw = r.get(_redis_subs_key(session_id))
+        if not raw:
+            return []
+        return json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return []
+
+def _redis_save_subs(session_id: str, subs: list[dict]):
+    r = _get_redis()
+    if not r:
+        return
+    try:
+        r.set(_redis_subs_key(session_id), json.dumps(subs))
+    except Exception:
+        pass
+
+
+def _next_version_from_list(subs: list[dict], submission_type: str) -> int:
+    versions = [s["version"] for s in subs if s.get("submission_type") == submission_type]
+    return (max(versions) if versions else 0) + 1
+
 
 def _next_version(db, session_id: str, submission_type: str = "baseline") -> int:
     row = db.execute(
@@ -129,6 +186,14 @@ def _next_version(db, session_id: str, submission_type: str = "baseline") -> int
 
 
 def list_submissions(session_id: str, submission_type: str | None = None) -> list[dict]:
+    r_subs = _redis_get_subs(session_id)
+    if r_subs:
+        if submission_type:
+            filtered = [s for s in r_subs if s.get("submission_type") == submission_type]
+            filtered.sort(key=lambda s: s.get("version", 0), reverse=True)
+            return filtered
+        r_subs.sort(key=lambda s: (s.get("submission_type", ""), -s.get("version", 0)))
+        return r_subs
     db = _get_db()
     if submission_type:
         rows = db.execute(
@@ -149,9 +214,17 @@ def list_submissions(session_id: str, submission_type: str | None = None) -> lis
 
 
 def next_expected_version(session_id: str, submission_type: str = "baseline") -> int:
-    """Return the next version to show in the submission form.
-    If the latest version for this type is incomplete (missing XER or narrative), return that version.
-    Otherwise return latest+1."""
+    """Return the next version to show in the submission form."""
+    r_subs = _redis_get_subs(session_id)
+    if r_subs:
+        typed = [s for s in r_subs if s.get("submission_type") == submission_type]
+        if not typed:
+            return 1
+        typed.sort(key=lambda s: s.get("version", 0), reverse=True)
+        latest = typed[0]
+        if latest.get("xer_filename") and latest.get("narr_filename"):
+            return latest["version"] + 1
+        return latest["version"]
     db = _get_db()
     latest = db.execute(
         "SELECT version, xer_filename, narr_filename FROM baseline_submissions "
@@ -178,20 +251,25 @@ def create_submission(
     resp_filename: Optional[str] = None,
     resp_size: int = 0,
 ) -> dict:
-    db = _get_db()
-    ver = _next_version(db, session_id, submission_type)
+    r_subs = _redis_get_subs(session_id)
+    ver = _next_version_from_list(r_subs, submission_type) if r_subs or _get_redis() else None
     now = datetime.now(timezone.utc).isoformat()
-    db.execute(
-        "INSERT INTO baseline_submissions "
-        "(session_id, submission_type, version, xer_filename, xer_size, narr_filename, narr_size, "
-        "resp_filename, resp_size, submitted_at, status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Under Review')",
-        (session_id, submission_type, ver, xer_filename, xer_size, narr_filename, narr_size,
-         resp_filename, resp_size, now),
-    )
-    db.commit()
-    db.close()
-    return {
+
+    if ver is None:
+        db = _get_db()
+        ver = _next_version(db, session_id, submission_type)
+        db.execute(
+            "INSERT INTO baseline_submissions "
+            "(session_id, submission_type, version, xer_filename, xer_size, narr_filename, narr_size, "
+            "resp_filename, resp_size, submitted_at, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Under Review')",
+            (session_id, submission_type, ver, xer_filename, xer_size, narr_filename, narr_size,
+             resp_filename, resp_size, now),
+        )
+        db.commit()
+        db.close()
+
+    entry = {
         "submission_type": submission_type,
         "version": ver,
         "xer_filename": xer_filename,
@@ -204,8 +282,34 @@ def create_submission(
         "status": "Under Review",
     }
 
+    if _get_redis():
+        r_subs = [s for s in r_subs if not (s.get("submission_type") == submission_type and s.get("version") == ver)]
+        r_subs.append(entry)
+        _redis_save_subs(session_id, r_subs)
+        try:
+            db = _get_db()
+            db.execute(
+                "INSERT OR REPLACE INTO baseline_submissions "
+                "(session_id, submission_type, version, xer_filename, xer_size, narr_filename, narr_size, "
+                "resp_filename, resp_size, submitted_at, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Under Review')",
+                (session_id, submission_type, ver, xer_filename, xer_size, narr_filename, narr_size,
+                 resp_filename, resp_size, now),
+            )
+            db.commit()
+            db.close()
+        except Exception:
+            pass
+
+    return entry
+
 
 def get_submission(session_id: str, version: int, submission_type: str = "baseline") -> Optional[dict]:
+    r_subs = _redis_get_subs(session_id)
+    if r_subs:
+        for s in r_subs:
+            if s.get("submission_type") == submission_type and s.get("version") == version:
+                return s
     db = _get_db()
     row = db.execute(
         "SELECT submission_type, version, xer_filename, xer_size, narr_filename, narr_size, "
@@ -219,6 +323,22 @@ def get_submission(session_id: str, version: int, submission_type: str = "baseli
 
 def update_submission(session_id: str, version: int, submission_type: str = "baseline", **kwargs) -> Optional[dict]:
     """Update specific fields on an existing submission."""
+    allowed = {"xer_filename", "xer_size", "narr_filename", "narr_size",
+               "resp_filename", "resp_size", "status"}
+    updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+
+    r_subs = _redis_get_subs(session_id)
+    if r_subs:
+        found = None
+        for s in r_subs:
+            if s.get("submission_type") == submission_type and s.get("version") == version:
+                for k, v in updates.items():
+                    s[k] = v
+                found = dict(s)
+                break
+        if found:
+            _redis_save_subs(session_id, r_subs)
+
     db = _get_db()
     row = db.execute(
         "SELECT * FROM baseline_submissions WHERE session_id = ? AND submission_type = ? AND version = ?",
@@ -226,10 +346,7 @@ def update_submission(session_id: str, version: int, submission_type: str = "bas
     ).fetchone()
     if not row:
         db.close()
-        return None
-    allowed = {"xer_filename", "xer_size", "narr_filename", "narr_size",
-               "resp_filename", "resp_size", "status"}
-    updates = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+        return found if r_subs else None
     if not updates:
         db.close()
         return dict(row)
@@ -248,7 +365,7 @@ def update_submission(session_id: str, version: int, submission_type: str = "bas
         (session_id, submission_type, version),
     ).fetchone()
     db.close()
-    return dict(updated) if updated else None
+    return dict(updated) if updated else found
 
 
 def get_previous_version(session_id: str, current_version: int) -> int:
@@ -261,6 +378,18 @@ def get_previous_version(session_id: str, current_version: int) -> int:
 def delete_submissions_by_file(session_id: str, filename: str) -> int:
     """Delete all submissions that reference the given filename (XER, narrative, or response).
     Also deletes associated review results. Returns number of submissions removed."""
+    r_subs = _redis_get_subs(session_id)
+    removed_versions = []
+    if r_subs:
+        new_subs = []
+        for s in r_subs:
+            if s.get("xer_filename") == filename or s.get("narr_filename") == filename or s.get("resp_filename") == filename:
+                removed_versions.append((s.get("submission_type"), s.get("version")))
+            else:
+                new_subs.append(s)
+        if removed_versions:
+            _redis_save_subs(session_id, new_subs)
+
     db = _get_db()
     rows = db.execute(
         "SELECT submission_type, version FROM baseline_submissions WHERE session_id = ? "
@@ -274,14 +403,16 @@ def delete_submissions_by_file(session_id: str, filename: str) -> int:
             (session_id, r["submission_type"], r["version"]),
         )
         count += 1
+        if (r["submission_type"], r["version"]) not in removed_versions:
+            removed_versions.append((r["submission_type"], r["version"]))
     db.commit()
     db.close()
-    for r in rows:
+    for stype, ver in removed_versions:
         try:
-            delete_review(session_id, r["version"])
+            delete_review(session_id, ver)
         except Exception:
             pass
-    return count
+    return max(count, len(removed_versions))
 
 
 def has_scope_docs(session_id: str) -> bool:
@@ -527,8 +658,41 @@ def save_exception_report(session_id: str, version: int, exceptions: list[dict])
     return path
 
 
+def _redis_reviews_key(session_id: str) -> str:
+    return _BL_REVIEWS_PREFIX + session_id
+
+def _redis_get_reviews(session_id: str) -> list[dict]:
+    r = _get_redis()
+    if not r:
+        return []
+    try:
+        raw = r.get(_redis_reviews_key(session_id))
+        if not raw:
+            return []
+        return json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return []
+
+def _redis_save_reviews(session_id: str, reviews: list[dict]):
+    r = _get_redis()
+    if not r:
+        return
+    try:
+        r.set(_redis_reviews_key(session_id), json.dumps(reviews))
+    except Exception:
+        pass
+
+
 def list_reviews(session_id: str) -> list[dict]:
     """Return metadata for all review results."""
+    r_revs = _redis_get_reviews(session_id)
+    if r_revs:
+        for d in r_revs:
+            d["has_exception_report"] = bool(d.get("exception_filepath"))
+            if isinstance(d.get("columns"), str):
+                d["columns"] = json.loads(d["columns"])
+        r_revs.sort(key=lambda d: d.get("version", 0), reverse=True)
+        return r_revs
     db = _get_db()
     db.execute("""
         CREATE TABLE IF NOT EXISTS baseline_reviews (
@@ -571,6 +735,10 @@ def list_reviews(session_id: str) -> list[dict]:
 
 def get_last_comment_number(session_id: str) -> int:
     """Return the highest BLR-NNN number used across all reviews for this project."""
+    r_revs = _redis_get_reviews(session_id)
+    if r_revs:
+        nums = [rv.get("last_comment_num", 0) for rv in r_revs]
+        return max(nums) if nums else 0
     db = _get_db()
     db.execute("""
         CREATE TABLE IF NOT EXISTS baseline_reviews (
@@ -604,6 +772,24 @@ def save_review_meta(
     filepath: str, last_comment_num: int = 0,
     exception_count: int = 0, exception_filepath: str = "",
 ) -> dict:
+    now = datetime.now(timezone.utc).isoformat()
+    entry = {
+        "version": version,
+        "columns": columns if isinstance(columns, list) else json.loads(columns),
+        "comment_count": comment_count,
+        "last_comment_num": last_comment_num,
+        "exception_count": exception_count,
+        "exception_filepath": exception_filepath,
+        "filepath": filepath,
+        "created_at": now,
+    }
+
+    if _get_redis():
+        r_revs = _redis_get_reviews(session_id)
+        r_revs = [rv for rv in r_revs if rv.get("version") != version]
+        r_revs.append(entry)
+        _redis_save_reviews(session_id, r_revs)
+
     db = _get_db()
     db.execute("""
         CREATE TABLE IF NOT EXISTS baseline_reviews (
@@ -629,7 +815,6 @@ def save_review_meta(
             db.execute(col_sql)
         except Exception:
             pass
-    now = datetime.now(timezone.utc).isoformat()
     db.execute(
         "INSERT OR REPLACE INTO baseline_reviews "
         "(session_id, version, columns, comment_count, last_comment_num, "
@@ -649,6 +834,11 @@ def save_review_meta(
 
 def delete_review(session_id: str, version: int) -> bool:
     """Delete a review result (DB row + files on disk + vector store). Returns True if deleted."""
+    if _get_redis():
+        r_revs = _redis_get_reviews(session_id)
+        r_revs = [rv for rv in r_revs if rv.get("version") != version]
+        _redis_save_reviews(session_id, r_revs)
+
     db = _get_db()
     row = db.execute(
         "SELECT filepath, exception_filepath FROM baseline_reviews "
@@ -657,7 +847,7 @@ def delete_review(session_id: str, version: int) -> bool:
     ).fetchone()
     if not row:
         db.close()
-        return False
+        return _get_redis() is not None
     for fpath in [row["filepath"], row["exception_filepath"]]:
         if fpath and os.path.isfile(fpath):
             try:
@@ -682,6 +872,15 @@ def delete_review(session_id: str, version: int) -> bool:
 
 
 def get_review(session_id: str, version: int) -> Optional[dict]:
+    r_revs = _redis_get_reviews(session_id)
+    if r_revs:
+        for rv in r_revs:
+            if rv.get("version") == version:
+                d = dict(rv)
+                if isinstance(d.get("columns"), str):
+                    d["columns"] = json.loads(d["columns"])
+                d["has_exception_report"] = bool(d.get("exception_filepath"))
+                return d
     db = _get_db()
     db.execute("""
         CREATE TABLE IF NOT EXISTS baseline_reviews (
