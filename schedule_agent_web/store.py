@@ -217,6 +217,10 @@ def is_persistence_available() -> bool:
 
 # --- Conversation Digest (PCM review & vectorization governance) ---
 
+_DIGEST_PENDING_PREFIX = "vuelogic:digest_pending:"
+_DIGEST_APPROVED_PREFIX = "vuelogic:digest_approved:"
+_DIGEST_DISCARDED_PREFIX = "vuelogic:digest_discarded:"
+
 def _digest_dir(session_id: str) -> str:
     d = os.path.join(_file_store_dir(), _safe_session(session_id), "digests")
     os.makedirs(d, exist_ok=True)
@@ -251,16 +255,44 @@ def _save_json(path: str, data: list) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def _redis_digest_get(key: str) -> list:
+    r = _get_redis()
+    if not r:
+        return []
+    try:
+        raw = r.get(key)
+        if not raw:
+            return []
+        return json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return []
+
+
+def _redis_digest_set(key: str, data: list):
+    r = _get_redis()
+    if not r:
+        return
+    try:
+        r.set(key, json.dumps(data))
+    except Exception:
+        pass
+
+
 def get_pending_digest(session_id: str) -> list:
-    """Return pending digest items awaiting PCM review.
-    Each item: {id, timestamp, topic, summary, messages: [{role,content}], priority, status}
-    """
+    """Return pending digest items awaiting PCM review."""
+    items = _redis_digest_get(_DIGEST_PENDING_PREFIX + session_id)
+    if items:
+        return items
     return _load_json(_digest_path(session_id))
 
 
 def save_pending_digest(session_id: str, items: list) -> None:
     """Replace pending digest with new items."""
-    _save_json(_digest_path(session_id), items)
+    _redis_digest_set(_DIGEST_PENDING_PREFIX + session_id, items)
+    try:
+        _save_json(_digest_path(session_id), items)
+    except Exception:
+        pass
 
 
 def append_pending_digest(session_id: str, item: dict) -> None:
@@ -270,12 +302,42 @@ def append_pending_digest(session_id: str, item: dict) -> None:
     save_pending_digest(session_id, items)
 
 
+def _get_approved_list(session_id: str) -> list:
+    items = _redis_digest_get(_DIGEST_APPROVED_PREFIX + session_id)
+    if items:
+        return items
+    return _load_json(_approved_path(session_id))
+
+
+def _save_approved_list(session_id: str, items: list):
+    _redis_digest_set(_DIGEST_APPROVED_PREFIX + session_id, items)
+    try:
+        _save_json(_approved_path(session_id), items)
+    except Exception:
+        pass
+
+
+def _get_discarded_list(session_id: str) -> list:
+    items = _redis_digest_get(_DIGEST_DISCARDED_PREFIX + session_id)
+    if items:
+        return items
+    return _load_json(_discarded_path(session_id))
+
+
+def _save_discarded_list(session_id: str, items: list):
+    _redis_digest_set(_DIGEST_DISCARDED_PREFIX + session_id, items)
+    try:
+        _save_json(_discarded_path(session_id), items)
+    except Exception:
+        pass
+
+
 def approve_digest_items(session_id: str, item_ids: list[str]) -> list[dict]:
     """Move items from pending or discarded to approved. Returns the approved items."""
     ids = set(item_ids)
     pending = get_pending_digest(session_id)
-    discarded_log = _load_json(_discarded_path(session_id))
-    approved_log = _load_json(_approved_path(session_id))
+    discarded_log = _get_discarded_list(session_id)
+    approved_log = _get_approved_list(session_id)
 
     to_approve = [i for i in pending if i.get("id") in ids]
     remaining_pending = [i for i in pending if i.get("id") not in ids]
@@ -292,8 +354,8 @@ def approve_digest_items(session_id: str, item_ids: list[str]) -> list[dict]:
         approved_log.append(item)
 
     save_pending_digest(session_id, remaining_pending)
-    _save_json(_discarded_path(session_id), remaining_discarded)
-    _save_json(_approved_path(session_id), approved_log)
+    _save_discarded_list(session_id, remaining_discarded)
+    _save_approved_list(session_id, approved_log)
     return to_approve
 
 
@@ -301,8 +363,8 @@ def discard_digest_items(session_id: str, item_ids: list[str]) -> int:
     """Move items from pending or approved to discarded log (30-day retention). Returns count discarded."""
     ids = set(item_ids)
     pending = get_pending_digest(session_id)
-    approved_log = _load_json(_approved_path(session_id))
-    discarded_log = _load_json(_discarded_path(session_id))
+    approved_log = _get_approved_list(session_id)
+    discarded_log = _get_discarded_list(session_id)
 
     to_discard = [i for i in pending if i.get("id") in ids]
     remaining_pending = [i for i in pending if i.get("id") not in ids]
@@ -319,25 +381,25 @@ def discard_digest_items(session_id: str, item_ids: list[str]) -> int:
         discarded_log.append(item)
 
     save_pending_digest(session_id, remaining_pending)
-    _save_json(_approved_path(session_id), remaining_approved)
-    _save_json(_discarded_path(session_id), discarded_log)
+    _save_approved_list(session_id, remaining_approved)
+    _save_discarded_list(session_id, discarded_log)
     return len(to_discard)
 
 
 def get_discarded_log(session_id: str) -> list:
     """Return discarded digest items (within 30-day retention)."""
     purge_expired_discards(session_id)
-    return _load_json(_discarded_path(session_id))
+    return _get_discarded_list(session_id)
 
 
 def get_approved_log(session_id: str) -> list:
     """Return all approved (vectorized) digest items."""
-    return _load_json(_approved_path(session_id))
+    return _get_approved_list(session_id)
 
 
 def purge_expired_discards(session_id: str) -> int:
     """Remove discarded items older than 30 days. Returns count purged."""
-    items = _load_json(_discarded_path(session_id))
+    items = _get_discarded_list(session_id)
     if not items:
         return 0
     from datetime import timedelta
@@ -345,7 +407,7 @@ def purge_expired_discards(session_id: str) -> int:
     kept = [i for i in items if (i.get("discarded_at") or "") >= cutoff]
     purged = len(items) - len(kept)
     if purged > 0:
-        _save_json(_discarded_path(session_id), kept)
+        _save_discarded_list(session_id, kept)
     return purged
 
 
