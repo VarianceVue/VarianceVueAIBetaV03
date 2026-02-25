@@ -1022,8 +1022,23 @@
       .blr-success-actions { flex-direction: column; }
       .blr-success-actions button { width: 100%; }
 
-      .blr-viewer-card { max-width: 100vw; border-radius: 12px 12px 0 0; }
-      .blr-viewer-overlay { padding: 0; align-items: flex-end; }
+      .blr-viewer-overlay { padding: 0; align-items: stretch; }
+      .blr-viewer-card {
+        max-width: 100vw; border-radius: 0;
+        display: flex; flex-direction: column; height: 100vh;
+      }
+      .blr-viewer-header {
+        position: sticky; top: 0; z-index: 2;
+        padding: 0.75rem 1rem; flex-shrink: 0;
+      }
+      .blr-viewer-header h3 { font-size: 0.78rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .blr-viewer-close {
+        width: 36px; height: 36px; min-width: 36px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1.5rem; background: #f1f5f9; border-radius: 8px;
+        color: #0f172a; flex-shrink: 0;
+      }
+      .blr-viewer-body { flex: 1; overflow: auto; }
 
       .blr-modal-card { max-width: calc(100vw - 2rem); margin: 0 1rem; }
 
