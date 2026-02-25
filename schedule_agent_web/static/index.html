@@ -20,11 +20,35 @@
   }
 }
 </script>
+  <script>
+  (function(){
+    try {
+      var sid = localStorage.getItem('vuelogic_session_id');
+      var raw = localStorage.getItem('vuelogic_project_state');
+      if (!sid || !raw) return;
+      var st = JSON.parse(raw);
+      if (st.activities && st.activities.length > 0) return;
+      var x = new XMLHttpRequest();
+      x.open('GET', '/api/schedule?session_id=' + encodeURIComponent(sid), false);
+      try { x.setRequestHeader('Authorization', 'Bearer ' + (localStorage.getItem('vuelogic_auth_token') || '')); } catch(e){}
+      x.send();
+      if (x.status === 200) {
+        var d = JSON.parse(x.responseText);
+        if (d && d.activities && d.activities.length > 0) {
+          st.activities = d.activities;
+          st.wbs = d.wbs || st.wbs || [];
+          st.projectName = d.projectName || st.projectName;
+          localStorage.setItem('vuelogic_project_state', JSON.stringify(st));
+        }
+      }
+    } catch(e){}
+  })();
+  </script>
   <script type="module" crossorigin src="/assets/index-BiHMtVX4.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-BGsUHre6.css">
   <style>
-    /* ── Hide React dashboard cards (Engine Readiness, CPM Integration, Engine Operational) globally ── */
-    #root .max-w-7xl.space-y-12 { display: none !important; }
+    /* ── Hide React content area when custom HTML pages are active; show for workspace tabs ── */
+    #root.react-content-hidden .max-w-7xl.space-y-12 { display: none !important; }
 
     /* ── Auth / project overlay ────────────────────────── */
     #auth-overlay {
@@ -1704,7 +1728,7 @@
       </div>
     </div>
 
-    <div id="root" style="display:none"></div>
+    <div id="root" class="react-content-hidden" style="display:none"></div>
 
   <script>
   (function(){
@@ -2155,9 +2179,40 @@
 
     function activateReactTab(tabLabel, sbId) {
       _sbActive = sbId;
-      setTimeout(() => clickReactTab(tabLabel), 50);
+
+      const schedTabs = ['activities', 'gantt', 'health'];
+      if (schedTabs.includes(sbId)) {
+        _ensureScheduleLoaded(tabLabel, sbId);
+      } else {
+        setTimeout(() => clickReactTab(tabLabel), 50);
+      }
       updateOverlays();
       renderSidebar();
+    }
+
+    async function _ensureScheduleLoaded(tabLabel, sbId) {
+      const proj = getActiveProject();
+      if (!proj) { setTimeout(() => clickReactTab(tabLabel), 50); return; }
+      try {
+        const state = JSON.parse(localStorage.getItem('vuelogic_project_state') || '{}');
+        if (state.activities && state.activities.length > 0) {
+          setTimeout(() => clickReactTab(tabLabel), 50);
+          return;
+        }
+        const res = await fetch(API + '/api/schedule?session_id=' + encodeURIComponent(proj.project_id), { headers: authHeaders() });
+        if (!res.ok) { setTimeout(() => clickReactTab(tabLabel), 50); return; }
+        const data = await res.json();
+        if (data && data.activities && data.activities.length > 0) {
+          state.activities = data.activities;
+          state.wbs = data.wbs || state.wbs || [];
+          state.projectName = data.projectName || state.projectName;
+          localStorage.setItem('vuelogic_project_state', JSON.stringify(state));
+          sessionStorage.setItem('_vl_goto', sbId + '|' + tabLabel);
+          window.location.reload();
+          return;
+        }
+      } catch(e) {}
+      setTimeout(() => clickReactTab(tabLabel), 50);
     }
 
     function updateOverlays() {
@@ -2204,8 +2259,13 @@
       if (isRes) loadBlrResults();
       if (isUpd) loadUpdStatus();
 
-      if (customPage) { $('root').style.display = 'none'; }
-      else if ($('auth-overlay').classList.contains('hidden')) { $('root').style.display = ''; }
+      if (customPage) {
+        $('root').style.display = 'none';
+        $('root').classList.add('react-content-hidden');
+      } else if ($('auth-overlay').classList.contains('hidden')) {
+        $('root').style.display = '';
+        $('root').classList.remove('react-content-hidden');
+      }
     }
 
     function _hideUnwantedReactCards() {
@@ -4541,11 +4601,22 @@
             fetchProjects();
             if (proj?.project_id) {
               $('activeProjectName').textContent = proj.project_id;
-              _sbLevel = 'top';
-              _sbActive = 'dashboard';
-              hideOverlay();
-              updateOverlays();
-              // Check for pending digest items on login
+              const _goto = sessionStorage.getItem('_vl_goto');
+              if (_goto) {
+                sessionStorage.removeItem('_vl_goto');
+                const [gSbId, gLabel] = _goto.split('|');
+                _sbLevel = 'workspace';
+                _sbActive = gSbId;
+                hideOverlay();
+                updateOverlays();
+                renderSidebar();
+                setTimeout(() => clickReactTab(gLabel), 200);
+              } else {
+                _sbLevel = 'top';
+                _sbActive = 'dashboard';
+                hideOverlay();
+                updateOverlays();
+              }
               checkPendingDigest(proj.project_id);
               return;
             }
