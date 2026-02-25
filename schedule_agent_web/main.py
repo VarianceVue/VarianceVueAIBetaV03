@@ -3262,15 +3262,24 @@ def _call_llm(system: str, messages_for_llm: list, max_tokens: int = 8192, prefe
         claude_messages = [{"role": m["role"], "content": m["content"]} for m in messages_for_llm if m["role"] in ("user", "assistant")]
         if max_tokens > 64000:
             max_tokens = 64000
+        _MODEL_MAX_TOKENS = {
+            "claude-3-haiku-20240307": 4096,
+            "claude-3-5-haiku-20241022": 8192,
+            "claude-3-sonnet-20240229": 4096,
+            "claude-3-5-sonnet-20241022": 8192,
+            "claude-sonnet-4-20250514": 16384,
+        }
         last_err = None
         for try_model in models_to_try:
             try:
                 client = Anthropic(api_key=key)
-                if max_tokens > 8192:
+                model_max = _MODEL_MAX_TOKENS.get(try_model, max_tokens)
+                effective_max = min(max_tokens, model_max)
+                if effective_max > 8192:
                     collected = []
                     with client.messages.stream(
                         model=try_model,
-                        max_tokens=max_tokens,
+                        max_tokens=effective_max,
                         system=system,
                         messages=claude_messages,
                     ) as stream:
@@ -3280,7 +3289,7 @@ def _call_llm(system: str, messages_for_llm: list, max_tokens: int = 8192, prefe
                 else:
                     resp = client.messages.create(
                         model=try_model,
-                        max_tokens=max_tokens,
+                        max_tokens=effective_max,
                         system=system,
                         messages=claude_messages,
                     )
@@ -3288,7 +3297,10 @@ def _call_llm(system: str, messages_for_llm: list, max_tokens: int = 8192, prefe
                 return (text, None)
             except Exception as e:
                 last_err = e
-                if "404" in str(e) or "not_found" in str(e).lower():
+                err_str = str(e).lower()
+                if "404" in str(e) or "not_found" in err_str:
+                    continue
+                if "max_tokens" in err_str and "maximum" in err_str:
                     continue
                 return ("", str(e))
         return ("", str(last_err) if last_err else "No Claude model available. Set ANTHROPIC_MODEL in Vercel to a model your account has (e.g. claude-3-haiku-20240307).")
