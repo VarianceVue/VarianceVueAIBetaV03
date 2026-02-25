@@ -448,6 +448,24 @@ def update_file_meta(session_id: str, filename: str, **kwargs) -> bool:
     """Update metadata fields (category, vectorized, etc.) for a stored file."""
     if not session_id or not filename:
         return False
+    r = _get_redis()
+    if r:
+        try:
+            raw = r.get(FILES_KEY_PREFIX + session_id)
+            files = json.loads(raw) if raw else []
+            found = False
+            for f in files:
+                if f.get("filename") == filename:
+                    for k, v in kwargs.items():
+                        f[k] = v
+                    found = True
+                    break
+            if not found:
+                return False
+            r.set(FILES_KEY_PREFIX + session_id, json.dumps(files))
+            return True
+        except Exception:
+            return False
     files = _files_local_get(session_id)
     found = False
     for f in files:
