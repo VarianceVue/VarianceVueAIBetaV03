@@ -16,7 +16,10 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
 
-_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "baseline_review.db")
+_ON_VERCEL = bool(os.environ.get("VERCEL"))
+_BASE_DIR = "/tmp/vuelogic" if _ON_VERCEL else os.path.dirname(os.path.abspath(__file__))
+os.makedirs(_BASE_DIR, exist_ok=True)
+_DB_PATH = os.path.join(_BASE_DIR, "baseline_review.db")
 
 
 def _get_db():
@@ -293,7 +296,7 @@ def has_scope_docs(session_id: str) -> bool:
 
 # ── Review Results ─────────────────────────────────────────
 
-_REVIEWS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "file_store")
+_REVIEWS_DIR = os.path.join(_BASE_DIR, "file_store")
 
 VERSIONED_COLS = {"Comment Description", "Recommendation for Correction", "Contractor Response"}
 
