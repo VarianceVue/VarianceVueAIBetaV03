@@ -2094,12 +2094,19 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
     except Exception:
         pass
 
+    _ON_VERCEL = bool(os.environ.get("VERCEL"))
+    _MAX_XER = 25000 if _ON_VERCEL else 80000
+    _MAX_SPECS = 6000 if _ON_VERCEL else 12000
+    _MAX_NARR = 5000 if _ON_VERCEL else 8000
+    _MAX_RESP = 5000 if _ON_VERCEL else 10000
+    _MAX_TOKENS = 12000 if _ON_VERCEL else 65536
+
     user_msg_parts = []
     if specs_content:
-        preview = specs_content[:12000]
+        preview = specs_content[:_MAX_SPECS]
         user_msg_parts.append(f"## Contract Specifications\n{preview}")
     if resp_content:
-        preview = resp_content[:10000]
+        preview = resp_content[:_MAX_RESP]
         user_msg_parts.append(
             f"## Contractor's Filled Comment Response (from previous version)\n"
             f"Verify each contractor response for compliance with contract specifications. "
@@ -2107,10 +2114,10 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
         )
     if xer_content:
         xer_summary = _summarize_xer_for_review(xer_content)
-        xer_preview = xer_summary[:80000] if len(xer_summary) > 80000 else xer_summary
+        xer_preview = xer_summary[:_MAX_XER]
         user_msg_parts.append(f"## XER Schedule ({review_label} v{ver})\n{xer_preview}")
     if narr_content:
-        preview = narr_content[:8000]
+        preview = narr_content[:_MAX_NARR]
         user_msg_parts.append(f"## Schedule Narrative ({review_label} v{ver})\n{preview}")
     if not user_msg_parts:
         raise HTTPException(status_code=422, detail="No file content available for review.")
@@ -2118,12 +2125,12 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
     user_msg = "\n\n".join(user_msg_parts)
     user_msg += f"\n\nGenerate the baseline review comments as a JSON array with columns: {col_list}"
 
-    reply, err = _call_llm(system_prompt, [{"role": "user", "content": user_msg}], max_tokens=65536)
+    reply, err = _call_llm(system_prompt, [{"role": "user", "content": user_msg}], max_tokens=_MAX_TOKENS, prefer_fast=_ON_VERCEL)
     if err:
         raise HTTPException(status_code=502, detail=f"AI review failed: {err}")
 
     comments = _extract_json_array(reply)
-    if comments is None:
+    if comments is None and not _ON_VERCEL:
         retry_msg = (
             "Your previous response could not be parsed as valid JSON. "
             "Please output ONLY a valid JSON array (starting with [ and ending with ]). "
@@ -2133,7 +2140,7 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
             {"role": "user", "content": user_msg},
             {"role": "assistant", "content": reply},
             {"role": "user", "content": retry_msg},
-        ], max_tokens=65536)
+        ], max_tokens=_MAX_TOKENS)
         if not err2:
             comments = _extract_json_array(reply2)
     if comments is None:
@@ -2154,74 +2161,6 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
 
     exception_count = 0
     exception_filepath = ""
-    exceptions = []
-    if has_prev_comments:
-        from schedule_agent_web.baseline import save_exception_report
-        exc_system = (
-            "You are a senior CPM scheduling expert performing a PCM Exception Review. "
-            "Your task: identify DISCREPANCIES where the contractor claims they addressed a prior review comment "
-            "(marked 'Yes' or claimed as addressed in their response) BUT the evidence in the new P6 XER file "
-            "shows the issue was NOT actually corrected.\n\n"
-            "You are given:\n"
-            "1. Contract Specifications (the compliance standard)\n"
-            "2. The contractor's filled comment response sheet (from the previous review version)\n"
-            "3. The NEW P6 XER schedule file (the actual state of the schedule)\n\n"
-            "For each comment where the contractor claims 'addressed' or 'resolved' but the XER evidence "
-            "contradicts that claim, produce an exception entry.\n\n"
-            "Output ONLY a valid JSON array of objects. Each object must have these keys:\n"
-            "- 'Exception ID': Sequential EXC-001, EXC-002, etc.\n"
-            "- 'Original Comment ID': The BLR-NNN ID from the prior review that the contractor claimed to address.\n"
-            "- 'WBS Reference': The WBS element or activity ID involved.\n"
-            "- 'Original Comment Description': Brief summary of what the original comment required.\n"
-            "- 'Spec Section Reference': The contract spec section being violated.\n"
-            "- 'Contractor Response': What the contractor said in their response (summarized).\n"
-            "- 'Contractor Claimed Addressed': Always 'Yes' (these are only the ones contractor claimed fixed).\n"
-            "- 'Agent Evaluation': 'NOT ADDRESSED' for all entries in this report.\n"
-            "- 'Evidence from XER': Specific evidence from the XER file showing the issue persists "
-            "(e.g., 'Activity X still has 0-day duration', 'Logic tie still missing between A and B').\n"
-            "- 'Spec Non-Compliance Detail': How this violates the contract specification or CPM best practice.\n"
-            "- 'Severity': 'Critical' (spec violation / logic error) or 'Major' (best-practice non-compliance).\n\n"
-            "Rules:\n"
-            "- ONLY include entries where contractor claimed 'addressed/yes/resolved' but the XER proves otherwise.\n"
-            "- Do NOT include entries where the contractor genuinely fixed the issue.\n"
-            "- Do NOT include entries where the contractor marked 'No' or left blank.\n"
-            "- If there are NO exceptions (contractor addressed everything properly), return an empty array [].\n"
-            "- Be specific with XER evidence — cite activity IDs, durations, logic ties, float values.\n"
-            "- Pay special attention to logic-related comments (Missing Hard Logic, Preferential Cross-WBS, "
-            "Dangling Logic). If the contractor claimed these were addressed but the XER TASKPRED table "
-            "still shows the logic deficiency, flag as exception with specific predecessor/successor evidence.\n"
-            "- Output ONLY the JSON array, no markdown, no explanation."
-        )
-
-        exc_user_parts = []
-        if specs_content:
-            exc_user_parts.append(f"## Contract Specifications\n{specs_content[:12000]}")
-        exc_user_parts.append(
-            f"## Contractor's Filled Comment Response (Previous Version)\n{resp_content[:12000]}"
-        )
-        exc_user_parts.append(
-            f"## New P6 XER Schedule ({review_label} v{ver})\n{_summarize_xer_for_review(xer_content)[:80000]}"
-        )
-        exc_user_msg = "\n\n".join(exc_user_parts)
-        exc_user_msg += (
-            "\n\nIdentify all exceptions where the contractor claimed 'addressed' "
-            "but the XER evidence shows otherwise. Output as JSON array."
-        )
-
-        exc_reply, exc_err = _call_llm(exc_system, [{"role": "user", "content": exc_user_msg}])
-        if not exc_err and exc_reply:
-            exc_raw = exc_reply.strip()
-            if exc_raw.startswith("```"):
-                exc_raw = exc_raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-            try:
-                exceptions = json.loads(exc_raw)
-                if isinstance(exceptions, list) and len(exceptions) > 0:
-                    for idx, e in enumerate(exceptions):
-                        e["Exception ID"] = f"EXC-{idx + 1:03d}"
-                    exception_filepath = save_exception_report(request.session_id, ver, exceptions)
-                    exception_count = len(exceptions)
-            except Exception:
-                pass
 
     meta = save_review_meta(
         request.session_id, ver, columns, len(comments), filepath, last_comment_num,
@@ -2238,7 +2177,130 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
             for c in comments
         )
         index_file(request.session_id, f"_baseline_review_v{ver}", review_text)
-        if exception_count > 0 and exceptions:
+    except Exception:
+        pass
+
+    return {"ok": True, "review": meta, "comments": comments, "has_prev_comments": has_prev_comments}
+
+
+class ExceptionReportRequest(BaseModel):
+    session_id: str
+    version: int
+    submission_type: str = "baseline"
+
+
+@app.post("/api/baseline/review/exceptions")
+def api_baseline_review_exceptions(request: ExceptionReportRequest):
+    """Generate exception report (separate from main review to avoid timeout)."""
+    if not request.session_id:
+        raise HTTPException(status_code=400, detail="session_id required")
+    if not get_status_dict().get("has_api_key"):
+        raise HTTPException(status_code=503, detail="Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
+
+    from schedule_agent_web.baseline import (
+        get_submission, get_specs, get_review, save_review_meta, save_exception_report,
+    )
+    from schedule_agent_web.store import get_file_content
+
+    stype = request.submission_type if request.submission_type in ("baseline", "update") else "baseline"
+    ver = request.version
+    sub = get_submission(request.session_id, ver, submission_type=stype)
+    if not sub:
+        raise HTTPException(status_code=404, detail=f"{stype.title()} v{ver} not found.")
+    if not sub.get("resp_filename"):
+        raise HTTPException(status_code=422, detail="No contractor response file for this version. Exception report requires a response file.")
+
+    review_label = "Baseline" if stype == "baseline" else "Update"
+    file_prefix = stype
+
+    specs_content = ""
+    specs_info = get_specs(request.session_id)
+    if specs_info:
+        specs_content = get_file_content(request.session_id, specs_info["filename"]) or ""
+
+    xer_raw = get_file_content(request.session_id, f"{file_prefix}_v{ver}_{sub['xer_filename']}") or ""
+    xer_content = _decode_xer_content(xer_raw)
+    resp_content = get_file_content(request.session_id, f"{file_prefix}_v{ver}_resp_{sub['resp_filename']}") or ""
+
+    _ON_VERCEL = bool(os.environ.get("VERCEL"))
+    _MAX_XER_EXC = 20000 if _ON_VERCEL else 80000
+    _MAX_SPECS_EXC = 5000 if _ON_VERCEL else 12000
+    _MAX_RESP_EXC = 8000 if _ON_VERCEL else 12000
+
+    exc_system = (
+        "You are a senior CPM scheduling expert performing a PCM Exception Review. "
+        "Your task: identify DISCREPANCIES where the contractor claims they addressed a prior review comment "
+        "(marked 'Yes' or claimed as addressed in their response) BUT the evidence in the new P6 XER file "
+        "shows the issue was NOT actually corrected.\n\n"
+        "You are given:\n"
+        "1. Contract Specifications (the compliance standard)\n"
+        "2. The contractor's filled comment response sheet (from the previous review version)\n"
+        "3. The NEW P6 XER schedule file (the actual state of the schedule)\n\n"
+        "For each comment where the contractor claims 'addressed' or 'resolved' but the XER evidence "
+        "contradicts that claim, produce an exception entry.\n\n"
+        "Output ONLY a valid JSON array of objects. Each object must have these keys:\n"
+        "- 'Exception ID': Sequential EXC-001, EXC-002, etc.\n"
+        "- 'Original Comment ID': The BLR-NNN ID from the prior review.\n"
+        "- 'WBS Reference': The WBS element or activity ID involved.\n"
+        "- 'Original Comment Description': Brief summary of what the original comment required.\n"
+        "- 'Spec Section Reference': The contract spec section being violated.\n"
+        "- 'Contractor Response': What the contractor said (summarized).\n"
+        "- 'Contractor Claimed Addressed': Always 'Yes'.\n"
+        "- 'Agent Evaluation': 'NOT ADDRESSED' for all entries.\n"
+        "- 'Evidence from XER': Specific evidence from XER showing the issue persists.\n"
+        "- 'Spec Non-Compliance Detail': How this violates the spec or CPM best practice.\n"
+        "- 'Severity': 'Critical' or 'Major'.\n\n"
+        "Rules:\n"
+        "- ONLY include entries where contractor claimed 'addressed/yes/resolved' but the XER proves otherwise.\n"
+        "- If there are NO exceptions, return an empty array [].\n"
+        "- Output ONLY the JSON array, no markdown, no explanation."
+    )
+
+    exc_user_parts = []
+    if specs_content:
+        exc_user_parts.append(f"## Contract Specifications\n{specs_content[:_MAX_SPECS_EXC]}")
+    exc_user_parts.append(f"## Contractor's Filled Comment Response\n{resp_content[:_MAX_RESP_EXC]}")
+    exc_user_parts.append(f"## New P6 XER Schedule ({review_label} v{ver})\n{_summarize_xer_for_review(xer_content)[:_MAX_XER_EXC]}")
+    exc_user_msg = "\n\n".join(exc_user_parts)
+    exc_user_msg += "\n\nIdentify all exceptions where the contractor claimed 'addressed' but the XER evidence shows otherwise. Output as JSON array."
+
+    exc_reply, exc_err = _call_llm(exc_system, [{"role": "user", "content": exc_user_msg}], max_tokens=8192, prefer_fast=_ON_VERCEL)
+    if exc_err:
+        raise HTTPException(status_code=502, detail=f"AI exception report failed: {exc_err}")
+
+    exceptions = []
+    exc_raw = exc_reply.strip()
+    if exc_raw.startswith("```"):
+        exc_raw = exc_raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        exceptions = json.loads(exc_raw)
+        if not isinstance(exceptions, list):
+            exceptions = []
+    except Exception:
+        exceptions = []
+
+    exception_count = len(exceptions)
+    exception_filepath = ""
+    if exception_count > 0:
+        for idx, e in enumerate(exceptions):
+            e["Exception ID"] = f"EXC-{idx + 1:03d}"
+        exception_filepath = save_exception_report(request.session_id, ver, exceptions)
+
+    existing_review = get_review(request.session_id, ver)
+    if existing_review:
+        save_review_meta(
+            request.session_id, ver,
+            existing_review.get("columns", []),
+            existing_review.get("comment_count", 0),
+            existing_review.get("filepath", ""),
+            existing_review.get("last_comment_num", 0),
+            exception_count=exception_count,
+            exception_filepath=exception_filepath,
+        )
+
+    try:
+        from schedule_agent_web.vector_store import index_file
+        if exception_count > 0:
             exc_text = "\n".join(
                 f"[{e.get('Exception ID','')}] {e.get('Original Comment ID','')} | "
                 f"WBS: {e.get('WBS Reference','')} | {e.get('Evidence from XER','')} | "
@@ -2249,7 +2311,7 @@ def api_baseline_review_execute(request: ReviewExecuteRequest):
     except Exception:
         pass
 
-    return {"ok": True, "review": meta, "comments": comments}
+    return {"ok": True, "exception_count": exception_count, "exceptions": exceptions}
 
 
 @app.get("/api/baseline/reviews")
@@ -3131,13 +3193,17 @@ def api_extract_schedule(request: ExtractScheduleRequest):
     return out
 
 
-def _call_llm(system: str, messages_for_llm: list, max_tokens: int = 8192) -> tuple[str, str | None]:
-    """Call OpenAI or Claude; returns (reply, error). Prefers Claude if ANTHROPIC_API_KEY set."""
+def _call_llm(system: str, messages_for_llm: list, max_tokens: int = 8192, prefer_fast: bool = False) -> tuple[str, str | None]:
+    """Call OpenAI or Claude; returns (reply, error). Prefers Claude if ANTHROPIC_API_KEY set.
+    Set prefer_fast=True to use Haiku/mini models (for time-sensitive serverless calls)."""
     if _use_claude():
         key = _get_anthropic_key()
-        default_models = ("claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-haiku-20240307")
+        if prefer_fast:
+            default_models = ("claude-3-5-haiku-20241022", "claude-3-haiku-20240307", "claude-sonnet-4-20250514")
+        else:
+            default_models = ("claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-haiku-20240307")
         model = os.environ.get("ANTHROPIC_MODEL") or default_models[0]
-        models_to_try = [model] + [m for m in default_models if m != model]
+        models_to_try = ([model] + [m for m in default_models if m != model]) if not prefer_fast else list(default_models)
         claude_messages = [{"role": m["role"], "content": m["content"]} for m in messages_for_llm if m["role"] in ("user", "assistant")]
         if max_tokens > 64000:
             max_tokens = 64000
@@ -3177,8 +3243,9 @@ def _call_llm(system: str, messages_for_llm: list, max_tokens: int = 8192) -> tu
         return ("", "No API key or OpenAI not installed. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
     try:
         client = OpenAI(api_key=key)
+        oai_model = "gpt-4o-mini" if prefer_fast else os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini")
         resp = client.chat.completions.create(
-            model=os.environ.get("OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+            model=oai_model,
             messages=[{"role": "system", "content": system}] + messages_for_llm,
             temperature=0.3,
             max_tokens=max_tokens,

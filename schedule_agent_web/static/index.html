@@ -2982,8 +2982,8 @@
       if (status === 502) {
         return 'The AI service encountered an error while generating the review. This may be due to the AI service being temporarily unavailable or overloaded. Please wait a moment and try again.';
       }
-      if (d.includes('timeout') || d.includes('timed out')) {
-        return 'The review took too long and timed out. This can happen with very large schedules. Please try again — if the issue persists, try reducing the number of custom columns.';
+      if (status === 504 || d.includes('timeout') || d.includes('timed out') || d.includes('FUNCTION_INVOCATION_TIMEOUT')) {
+        return 'The review timed out (serverless 60-second limit). This is usually temporary — please click "Try Again". The AI will use a faster model to fit within the time limit.';
       }
       if (d.includes('rate limit') || d.includes('quota')) {
         return 'The AI service usage limit has been reached. Please wait a few minutes before trying again.';
@@ -3009,10 +3009,15 @@
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ session_id: proj.project_id, version: ver, columns: allCols, submission_type: _blrModalStype }),
         });
+        if (res.status === 504) {
+          $('blrColModal').classList.remove('visible');
+          showReviewError(ver, interpretReviewError(504, 'FUNCTION_INVOCATION_TIMEOUT'));
+          return;
+        }
         const d = await res.json().catch(() => ({}));
         if (res.ok && d.ok) {
           $('blrColModal').classList.remove('visible');
-          _lastReviewResult = { version: ver, comments: d.comments || [], review: d.review || {}, columns: allCols };
+          _lastReviewResult = { version: ver, comments: d.comments || [], review: d.review || {}, columns: allCols, has_prev_comments: d.has_prev_comments || false };
           showReviewSuccess(ver, d);
           if (_blrModalStype === 'update') await loadUpdStatus();
           else await loadBlrStatus();
@@ -3086,6 +3091,7 @@
       const commentCount = (data.comments || []).length;
       const excCount = (data.review || {}).exception_count || 0;
       const hasExcReport = !!(data.review || {}).has_exception_report;
+      const hasPrevComments = !!(data.has_prev_comments);
 
       $('blrSuccessTitle').textContent = 'Baseline v' + ver + ' Review Completed';
       let subText = commentCount + ' review comment' + (commentCount !== 1 ? 's' : '') + ' generated.';
@@ -3118,6 +3124,42 @@
         excBtn.textContent = 'Exception Report (' + excCount + ')';
         excBtn.addEventListener('click', () => downloadExceptionReport(ver));
         actDiv.appendChild(excBtn);
+      } else if (hasPrevComments) {
+        const genExcBtn = document.createElement('button');
+        genExcBtn.className = 'blr-success-exc';
+        genExcBtn.style.background = '#7c3aed';
+        genExcBtn.textContent = 'Generate Exception Report';
+        genExcBtn.addEventListener('click', async () => {
+          genExcBtn.disabled = true;
+          genExcBtn.textContent = 'Generating\u2026';
+          try {
+            const proj = getActiveProject();
+            const eres = await fetch(API + '/api/baseline/review/exceptions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...authHeaders() },
+              body: JSON.stringify({ session_id: proj.project_id, version: ver, submission_type: _blrModalStype || 'baseline' }),
+            });
+            const ed = await eres.json().catch(() => ({}));
+            if (eres.ok && ed.ok) {
+              genExcBtn.textContent = ed.exception_count + ' exception(s) found';
+              genExcBtn.style.background = '#059669';
+              if (ed.exception_count > 0) {
+                genExcBtn.textContent = 'Download Exception Report (' + ed.exception_count + ')';
+                genExcBtn.disabled = false;
+                genExcBtn.addEventListener('click', () => downloadExceptionReport(ver));
+              }
+            } else {
+              genExcBtn.textContent = 'Failed — Try Again';
+              genExcBtn.disabled = false;
+              genExcBtn.style.background = '#dc2626';
+            }
+          } catch(ex) {
+            genExcBtn.textContent = 'Error — Try Again';
+            genExcBtn.disabled = false;
+            genExcBtn.style.background = '#dc2626';
+          }
+        });
+        actDiv.appendChild(genExcBtn);
       }
 
       const closeBtn = document.createElement('button');

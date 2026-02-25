@@ -709,7 +709,7 @@ def get_review(session_id: str, version: int) -> Optional[dict]:
             pass
     db.commit()
     row = db.execute(
-        "SELECT version, columns, comment_count, exception_count, exception_filepath, filepath, created_at "
+        "SELECT version, columns, comment_count, last_comment_num, exception_count, exception_filepath, filepath, created_at "
         "FROM baseline_reviews WHERE session_id = ? AND version = ?",
         (session_id, version),
     ).fetchone()
