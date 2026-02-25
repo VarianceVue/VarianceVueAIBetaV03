@@ -1135,7 +1135,6 @@ def api_digest_review(body: dict):
     if approve_ids:
         approved = approve_digest_items(session_id, approve_ids)
         from schedule_agent_web.vector_store import index_conversation_turn, is_qdrant_available
-        from schedule_agent_web.store import _load_json, _save_json, _approved_path
         if is_qdrant_available():
             for item in approved:
                 success = index_conversation_turn(
@@ -1150,13 +1149,13 @@ def api_digest_review(body: dict):
             for item in approved:
                 item["vectorized"] = False
 
-        approved_log = _load_json(_approved_path(session_id))
-        approved_ids_set = {i.get("id") for i in approved}
+        from schedule_agent_web.store import _get_approved_list, _save_approved_list
+        approved_log = _get_approved_list(session_id)
         for stored in approved_log:
             match = next((a for a in approved if a.get("id") == stored.get("id")), None)
             if match:
                 stored["vectorized"] = match.get("vectorized", False)
-        _save_json(_approved_path(session_id), approved_log)
+        _save_approved_list(session_id, approved_log)
 
     discarded_count = 0
     if discard_ids:
@@ -1178,13 +1177,13 @@ def api_conversation_vectorize(body: dict):
     if not session_id or not item_id:
         raise HTTPException(status_code=400, detail="session_id and item_id required")
 
-    from schedule_agent_web.store import _load_json, _save_json, _approved_path
+    from schedule_agent_web.store import _get_approved_list, _save_approved_list
     from schedule_agent_web.vector_store import index_conversation_turn, is_qdrant_available
 
     if not is_qdrant_available():
         raise HTTPException(status_code=503, detail="Vector store (Qdrant) is not available. Start Qdrant and try again.")
 
-    approved_log = _load_json(_approved_path(session_id))
+    approved_log = _get_approved_list(session_id)
     item = next((i for i in approved_log if i.get("id") == item_id), None)
     if not item:
         raise HTTPException(status_code=404, detail="Approved item not found.")
@@ -1195,7 +1194,7 @@ def api_conversation_vectorize(body: dict):
         item.get("assistant_response", ""),
     )
     item["vectorized"] = bool(success)
-    _save_json(_approved_path(session_id), approved_log)
+    _save_approved_list(session_id, approved_log)
 
     if not success:
         raise HTTPException(status_code=500, detail="Vectorization failed.")
