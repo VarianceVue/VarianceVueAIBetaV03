@@ -3821,6 +3821,13 @@
           + '<div style="margin-top:1rem"></div>'
           + '</div>';
         const dlArea = card.querySelector('.blr-card-body > div:last-child');
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'blr-exec-btn';
+        viewBtn.textContent = 'View Report';
+        viewBtn.style.padding = '8px 20px';
+        viewBtn.style.fontSize = '0.75rem';
+        viewBtn.addEventListener('click', () => fetchAndViewReview(r.version));
+        dlArea.appendChild(viewBtn);
         const dlBtn = document.createElement('button');
         dlBtn.className = 'blr-dl-btn';
         dlBtn.textContent = 'Download Review';
