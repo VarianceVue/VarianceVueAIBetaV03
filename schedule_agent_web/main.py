@@ -3791,6 +3791,13 @@ if static_dir.exists():
         app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    @app.get("/logo.png")
+    def logo():
+        logo_path = static_dir / "logo.png"
+        if logo_path.exists():
+            return FileResponse(logo_path, media_type="image/png")
+        raise HTTPException(status_code=404, detail="Logo not found")
+
     @app.get("/")
     def index():
         return FileResponse(
