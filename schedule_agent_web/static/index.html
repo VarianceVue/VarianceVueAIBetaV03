@@ -226,7 +226,7 @@
     #root.sidebar-open { margin-left: 280px; width: calc(100vw - 280px); overflow-x: hidden; }
 
     .sb-brand { padding: 1.25rem 1.5rem 1rem; display: flex; align-items: center; gap: 0.75rem; }
-    .sb-brand img { width: 88px; height: 88px; border-radius: 12px; object-fit: contain; flex-shrink: 0; }
+    .sb-brand img { width: 88px; height: 88px; border-radius: 50%; object-fit: contain; flex-shrink: 0; background: #fff; padding: 4px; }
     .sb-brand-text h1 { font-size: 1.1rem; font-weight: 900; color: #fff; margin: 0; letter-spacing: -0.03em; line-height: 1.2; }
     .sb-brand-text h1 span { color: #3b82f6; }
     .sb-brand-text p { font-size: 0.5rem; color: #475569; margin: 0.15rem 0 0; text-transform: uppercase; letter-spacing: 0.25em; font-weight: 800; font-style: italic; }
@@ -1132,7 +1132,7 @@
     <div id="auth-overlay">
       <!-- Login -->
       <div id="loginCard" class="auth-card">
-        <div style="text-align:center;margin-bottom:1rem"><img src="/logo.png" alt="VarianceVueAI" style="width:144px;height:144px;object-fit:contain;margin:0 auto"></div>
+        <div style="text-align:center;margin-bottom:1rem"><img src="/logo.png" alt="VarianceVueAI" style="width:144px;height:144px;object-fit:contain;margin:0 auto;border-radius:50%;background:#fff;padding:8px"></div>
         <h2>VarianceVueAI</h2>
         <p class="subtitle">Sign in to your account</p>
         <div id="loginAlert" class="auth-alert"></div>
@@ -1151,7 +1151,7 @@
 
       <!-- Register -->
       <div id="registerCard" class="auth-card" style="display:none">
-        <div style="text-align:center;margin-bottom:1rem"><img src="/logo.png" alt="VarianceVueAI" style="width:120px;height:120px;object-fit:contain;margin:0 auto"></div>
+        <div style="text-align:center;margin-bottom:1rem"><img src="/logo.png" alt="VarianceVueAI" style="width:120px;height:120px;object-fit:contain;margin:0 auto;border-radius:50%;background:#fff;padding:6px"></div>
         <h2>Create Account</h2>
         <p class="subtitle">Register with your business email</p>
         <div id="regAlert" class="auth-alert"></div>
@@ -1192,7 +1192,7 @@
 
       <!-- Project Selector (shown after login) -->
       <div id="projectCard" class="auth-card" style="display:none">
-        <div style="text-align:center;margin-bottom:1rem"><img src="/logo.png" alt="VarianceVueAI" style="width:120px;height:120px;object-fit:contain;margin:0 auto"></div>
+        <div style="text-align:center;margin-bottom:1rem"><img src="/logo.png" alt="VarianceVueAI" style="width:120px;height:120px;object-fit:contain;margin:0 auto;border-radius:50%;background:#fff;padding:6px"></div>
         <h2>Select Project</h2>
         <p class="subtitle" id="projectSubtitle">Choose a project to open</p>
         <div id="projectAlert" class="auth-alert"></div>
