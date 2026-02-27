@@ -39,3 +39,6 @@ This codebase currently has **no linter configuration**, **no automated test sui
 - The `.env` file at the repo root is loaded automatically by `python-dotenv` in `main.py`.
 - SQLite database and file store are created under `schedule_agent_web/file_store/` — this directory is gitignored and ephemeral in cloud environments.
 - Optional services (Qdrant, Upstash Redis, GraphRAG) degrade gracefully — the app falls back to local file store and keyword search.
+- FastAPI auto-serves Swagger UI at `/docs` and ReDoc at `/redoc` (unauthenticated).
+- The frontend is a single `index.html` (~4800 lines) with inline JS/CSS plus a minified React bundle in `static/assets/`. No npm or build tooling is needed.
+- To test the full login-to-chat flow, use the seeded user `user1@variancevue.com` / `VarianceVu3Tr14l` which has the `VARIANCEVUE` client and `DEMO` project pre-associated.
