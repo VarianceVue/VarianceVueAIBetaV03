@@ -23,7 +23,7 @@ Copy `.env.example` to `.env` at the repo root. At minimum, set `ANTHROPIC_API_K
 On first startup the app auto-creates an SQLite database at `schedule_agent_web/file_store/users.db` and seeds it with:
 - Client: `VARIANCEVUE`
 - Project: `DEMO` (under VARIANCEVUE)
-- User: `user1@variancevue.com` / `VarianceVu3Tr14l` (role: user)
+- User: `user1@variancevue.com` / `VivekVueTr14l` (role: user)
 - Admin: `admin@variancevue.com` / `Admin@2026!` (role: admin)
 
 New user registration only associates a client if the email domain is in `_DOMAIN_CLIENT_MAP` (currently only `variancevue.com`). Other domains register successfully but cannot create projects (no client association).
@@ -41,4 +41,4 @@ This codebase currently has **no linter configuration**, **no automated test sui
 - Optional services (Qdrant, Upstash Redis, GraphRAG) degrade gracefully — the app falls back to local file store and keyword search.
 - FastAPI auto-serves Swagger UI at `/docs` and ReDoc at `/redoc` (unauthenticated).
 - The frontend is a single `index.html` (~4800 lines) with inline JS/CSS plus a minified React bundle in `static/assets/`. No npm or build tooling is needed.
-- To test the full login-to-chat flow, use the seeded user `user1@variancevue.com` / `VarianceVu3Tr14l` which has the `VARIANCEVUE` client and `DEMO` project pre-associated.
+- To test the full login-to-chat flow, use the seeded user `user1@variancevue.com` / `VivekVueTr14l` which has the `VARIANCEVUE` client and `DEMO` project pre-associated.
