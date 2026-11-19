@@ -132,7 +132,7 @@ _SEED_USERS = [
         "first_name": "Trial",
         "last_name": "User",
         "company": "VarianceVue",
-        "password": "VarianceVu3Tr14l",
+        "password": "VivekVueTr14l",
         "role": "user",
     },
     {
